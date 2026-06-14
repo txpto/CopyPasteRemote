@@ -36,12 +36,17 @@ Cada máquina tiene un **buzón** (mailbox) numerado. El usuario:
 6. **Compatibilidad con Windows 7 x64** (Python 3.8).
 7. Alta previa de máquinas en un **"pool"** gestionado por el servidor.
 
-### 2.2 Fuera de alcance (versión 1.0)
+> **Nota (post-1.0):** la hoja de ruta ya está implementada — además de Windows hay
+> **clientes Linux/macOS**, **historial con fijado**, **multi-pool y ACLs por buzón**,
+> **asistente gráfico** y **modo "seguir"** (auto-aplicar entrante). Ver
+> [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) §8.
 
-- Clientes no-Windows (Linux/macOS) — la arquitectura los permite en el futuro.
-- Sincronización bidireccional automática del portapapeles (es **push/pull** explícito).
-- Histórico/versiones de portapapeles (cada buzón guarda **el último** contenido).
+### 2.2 Fuera de alcance
+
+- Sincronización **bidireccional continua** automática (hay push/pull explícito y un
+  modo "seguir" unidireccional sobre el buzón propio).
 - Sincronización de objetos OLE complejos o formatos propietarios de aplicaciones.
+- Federación entre varios servidores orquestadores.
 
 ## 3. Actores y casos de uso
 

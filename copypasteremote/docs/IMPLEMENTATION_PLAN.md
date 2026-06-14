@@ -144,10 +144,26 @@ Ejecutar: `pip install -r requirements-server.txt requests websocket-client pyte
 | Archivos enormes | Límite configurable + streaming + reanudación de descargas. |
 | Pérdida de credenciales | Rotación de tokens (`admin_cli rotate`) y revocación (`enable --disable`). |
 
-## 8. Hoja de ruta futura (post 1.0)
+## 8. Hoja de ruta — implementada ✅
 
-- Clientes Linux/macOS (el núcleo ya es multiplataforma).
-- Historial de portapapeles y "fijar" elementos.
-- Multi-pool y ACLs por buzón.
-- Cliente como icono de bandeja con configuración gráfica (asistente de alta).
-- Sincronización automática opcional (modo "seguir" un buzón).
+Todos los puntos previstos post-1.0 están implementados:
+
+- ✅ **Clientes Linux/macOS**: backend `clipboard_posix` (texto en ambos; archivos
+  vía `text/uri-list` en Linux y AppleScript en macOS; imagen best-effort). Selección
+  automática de backend por SO en `cpr_client.main`.
+- ✅ **Historial de portapapeles y "fijar"**: tabla `history` (últimos N por buzón +
+  fijados que no expiran), endpoints `GET /api/clip/{slot}/history`,
+  `GET .../history/{id}`, `POST .../history/{id}/pin`; GC de blobs por referencias;
+  submenú "History" en la bandeja. **Pruebas**: `test_roadmap.py`.
+- ✅ **Multi-pool y ACLs por buzón**: columna `pool` (las máquinas solo ven su pool;
+  push/pull y presencia restringidos al pool) y `acl_push`/`acl_pull` por buzón;
+  CLI `add-machine --pool`, `set-pool`, `set-acl`. **Pruebas**: `test_roadmap.py`.
+- ✅ **Asistente gráfico de alta**: `cpr_client.wizard` (Tkinter) con prueba de
+  conexión; `run_client.py --wizard` y auto-oferta cuando la config es inválida.
+- ✅ **Sincronización automática (modo "seguir")**: `auto_apply_incoming` aplica al
+  portapapeles local el contenido que llega a tu buzón, vía notificación WebSocket.
+
+### Posibles ampliaciones futuras
+- Historial con vista previa de contenido en el dashboard.
+- ACLs con grupos/roles y federación entre servidores.
+- Sincronización bidireccional continua (no solo "seguir" entrante).
