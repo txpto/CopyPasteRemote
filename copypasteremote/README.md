@@ -15,6 +15,13 @@ Máquina 1  ──Ctrl+Alt+2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2──
 - ⌨️ **Atajos globales** configurables + icono de **bandeja**.
 - 🪟 **Compatible con Windows 7/10/11 y Server 2016/2022** (cliente en Python 3.8).
 - 🧩 **Alta previa de máquinas** en un *pool* gestionado por el servidor.
+- 📊 **Dashboard de administración** en `/dashboard`: quién se conecta, qué se
+  comparte (origen → destino) y estado de los servicios.
+- ⚙️ **Auto-arranque como servicio de Windows** (servidor) y servicio lanzador o
+  tarea al iniciar sesión (cliente).
+
+> El proyecto vive en la subcarpeta **`copypasteremote/`** del repositorio; ejecuta
+> los comandos desde ahí.
 
 ## Documentación
 
@@ -56,13 +63,20 @@ python run_client.py             # app de bandeja con atajos globales
 Atajos por defecto: **`Ctrl+Alt+N`** envía al buzón N · **`Ctrl+Shift+N`** pega del
 buzón N · **`Ctrl+Alt+V`** pega de tu buzón.
 
+### Dashboard
+
+Abre **`https://TU_IP_PUBLICA:8765/dashboard`** e introduce la `admin_api_key`
+(`admin_cli show-admin-key`). Verás máquinas conectadas, contenido compartido
+(origen → destino) y actividad en tiempo real. Detalles en
+[docs/INSTALL.md](docs/INSTALL.md) (Parte D).
+
 ## Estructura
 
 ```
 cpr_shared/   Librería común (cripto + protocolo)
-cpr_server/   Orquestador (FastAPI: REST + WebSocket, SQLite, CLI admin)
-cpr_client/   Agente Windows (portapapeles, atajos, bandeja, transporte)
-scripts/      Despliegue (systemd, Docker, tarea programada, build .exe)
+cpr_server/   Orquestador (FastAPI: REST + WebSocket, SQLite, dashboard, CLI admin, servicio Windows)
+cpr_client/   Agente Windows (portapapeles, atajos, bandeja, transporte, servicio Windows)
+scripts/      Despliegue (systemd, Docker, servicio Windows, tarea programada, build .exe)
 docs/         Especificación, plan, arquitectura y manuales
 tests/        Pruebas unitarias e integración E2E
 ```

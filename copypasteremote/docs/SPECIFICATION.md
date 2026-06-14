@@ -96,6 +96,8 @@ Cada máquina tiene un **buzón** (mailbox) numerado. El usuario:
 | RF10 | Notificar (aviso emergente) cuando llega contenido al buzón propio. |
 | RF11 | Atajos de teclado totalmente configurables. |
 | RF12 | Funcionar tras reinicios y reconexiones de red automáticamente. |
+| RF13 | **Dashboard de administración** web: máquinas conectadas, contenido compartido (origen/destino), actividad y estado de los servicios. |
+| RF14 | **Auto-arranque como servicio de Windows** del servidor y del cliente (este último mediante servicio lanzador en la sesión interactiva). |
 
 ## 6. Requisitos no funcionales
 

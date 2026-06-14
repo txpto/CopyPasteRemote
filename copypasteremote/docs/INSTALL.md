@@ -6,6 +6,10 @@ privado (tras el DD-WRT) y la del **cliente** en cada máquina Windows.
 > Convención: los comandos del servidor empiezan por `#` o `$`; los del cliente
 > Windows van en `PowerShell` o `CMD`.
 
+> **Raíz del proyecto:** todo vive en la subcarpeta `copypasteremote/` del
+> repositorio. Ejecuta los comandos **desde dentro de esa carpeta** (es donde están
+> `run_server.py`, `run_client.py`, `requirements-*.txt`, `scripts/`, etc.).
+
 ---
 
 ## Parte A — Orquestador (servidor)
@@ -100,6 +104,22 @@ sudo systemctl status copypasteremote
 ```bash
 docker compose -f scripts/server/docker-compose.yml up -d
 ```
+
+**Como servicio de Windows (si el servidor corre en Windows):**
+
+El orquestador no necesita escritorio interactivo, así que encaja perfecto como
+servicio. Desde un PowerShell **elevado**, en la carpeta `copypasteremote/`:
+
+```powershell
+python -m pip install pywin32
+powershell -ExecutionPolicy Bypass -File scripts\server\install_service_windows.ps1 `
+    -PythonExe "C:\Python311\python.exe" -ConfigPath "C:\cpr\server-config.json"
+```
+
+Esto registra el servicio **CopyPasteRemoteServer** con **arranque automático**.
+Gestión: `sc.exe query CopyPasteRemoteServer`, o
+`python -m cpr_server.winservice start|stop|remove`. El script admite también
+`-UseNSSM -NssmPath nssm.exe` como alternativa.
 
 ### A.7 Alta de máquinas en el pool
 
@@ -226,6 +246,38 @@ REM Resultado: dist\CopyPasteRemote.exe
 Los campos de comportamiento y atajos son **opcionales** (si faltan, se usan los
 valores por defecto). Ver [`USER_GUIDE.md`](USER_GUIDE.md) para personalizarlos.
 
+### B6 — Arranque automático: Tarea Programada vs. Servicio de Windows
+
+El cliente necesita la **sesión interactiva** del usuario (portapapeles, atajos,
+bandeja), que **no** existe en la Sesión 0 de un servicio normal. Tienes dos
+opciones, ambas auto-arrancables:
+
+- **Tarea Programada al iniciar sesión (recomendada)** — secciones B1/B2. Es la más
+  sencilla y se ejecuta directamente en tu sesión.
+
+- **Servicio de Windows (lanzador de sesión)** — si prefieres gestionarlo como
+  servicio. Se instala un servicio **CopyPasteRemoteClient** que corre como
+  LocalSystem y **lanza el cliente dentro de la sesión activa** (y lo relanza al
+  iniciar sesión). Desde un PowerShell **elevado** en `copypasteremote/`:
+
+  ```powershell
+  python -m pip install pywin32
+  # Con ejecutable:
+  powershell -ExecutionPolicy Bypass -File scripts\client\install_service_windows.ps1 `
+      -ServicePython "C:\Python38\python.exe" -ExePath "C:\CopyPasteRemote\CopyPasteRemote.exe"
+  # O desde código:
+  powershell -ExecutionPolicy Bypass -File scripts\client\install_service_windows.ps1 `
+      -ServicePython "C:\Python38\python.exe" -RepoPath "C:\CopyPasteRemote" `
+      -ClientPythonw "C:\Python38\pythonw.exe"
+  ```
+
+  Gestión: `sc.exe query CopyPasteRemoteClient`, o
+  `python -m cpr_client.winservice start|stop|remove`.
+
+  > Nota: aun siendo un servicio, la **GUI** se ejecuta en tu sesión (es la única
+  > forma de que el portapapeles y los atajos funcionen). Si no hay nadie con sesión
+  > iniciada, el servicio espera y lanza el cliente en cuanto alguien entra.
+
 ---
 
 ## Parte C — Verificación de extremo a extremo
@@ -240,3 +292,29 @@ valores por defecto). Ver [`USER_GUIDE.md`](USER_GUIDE.md) para personalizarlos.
    *chunks*.
 
 Si algo falla, revisa la sección **Solución de problemas** del manual de uso.
+
+---
+
+## Parte D — Panel de administración (Dashboard)
+
+El servidor sirve un **dashboard web** para monitorizar el sistema:
+
+```
+https://TU_IP_PUBLICA:8765/dashboard
+```
+
+Al abrirlo te pedirá la **clave de administración** (`admin_api_key`, la que muestra
+`admin_cli show-admin-key`); se guarda solo en tu navegador (sessionStorage). El
+panel muestra, actualizándose cada pocos segundos:
+
+- **Estado del servicio**: versión, uptime, backend cripto, nº de máquinas,
+  conectadas y buzones con contenido.
+- **Máquinas del pool**: estado en línea/desconectado (equivale al estado del
+  servicio cliente), si están habilitadas y su último contacto.
+- **Contenido compartido**: por cada buzón, **origen → destino**, tipo, tamaño y un
+  resumen (nunca el contenido en claro: el servidor solo guarda datos cifrados).
+- **Actividad reciente**: conexiones, envíos (push) y recogidas (pull), con quién,
+  origen y destino.
+
+> Protege el acceso al dashboard: exponlo solo por HTTPS y guarda bien la
+> `admin_api_key`. Si lo prefieres, restringe el puerto en el DD-WRT a tus IPs.

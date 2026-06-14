@@ -40,7 +40,10 @@ CopyPasteRemote/
 │   ├── storage.py         # SQLite (máquinas, slots) + blobs en disco
 │   ├── auth.py            # Bearer por máquina + clave admin
 │   ├── presence.py        # Hub WebSocket (presencia/notificaciones)
-│   ├── main.py            # App FastAPI (REST + WS + mantenimiento)
+│   ├── activity.py        # Registro de actividad (para el dashboard)
+│   ├── dashboard.py       # UI web de administración (HTML/JS autónomo)
+│   ├── winservice.py      # Servicio de Windows del servidor (pywin32)
+│   ├── main.py            # App FastAPI (REST + WS + dashboard + mantenimiento)
 │   └── admin_cli.py       # Alta/baja de máquinas, generación de configs
 ├── cpr_client/            # Agente Windows
 │   ├── config.py          # Config del cliente + atajos por defecto
@@ -52,6 +55,7 @@ CopyPasteRemote/
 │   ├── clipboard_win.py   # Backend Win32 (texto/archivos/imagen/HTML)
 │   ├── hotkeys.py         # Atajos globales + worker serializado
 │   ├── tray.py            # Icono y menú de bandeja
+│   ├── winservice.py      # Servicio lanzador de Windows (corre la GUI en la sesión)
 │   └── main.py            # Punto de entrada (tray / headless / check / setup)
 ├── run_server.py          # Lanzador del servidor
 ├── run_client.py          # Lanzador del cliente
@@ -95,6 +99,14 @@ CopyPasteRemote/
 ### Fase 5 — Documentación  ✅
 - `SPECIFICATION.md`, `IMPLEMENTATION_PLAN.md`, `ARCHITECTURE.md`,
   `INSTALL.md` (servidor + cliente + DD-WRT/ESXi), `USER_GUIDE.md`.
+
+### Fase 6 — Dashboard y servicios de Windows  ✅
+- **Dashboard** web (`dashboard.py` + `activity.py` + endpoints `/api/admin/overview`
+  y `/api/admin/activity`): máquinas conectadas, contenido compartido (origen →
+  destino), actividad y estado del servicio. **Pruebas**: `test_dashboard.py`.
+- **Servicios de Windows**: `cpr_server.winservice` (orquestador como servicio
+  auto-arrancable) y `cpr_client.winservice` (servicio lanzador que arranca la GUI
+  del cliente en la sesión interactiva). Instaladores PowerShell en `scripts/`.
 
 ## 5. Decisiones de diseño clave
 
