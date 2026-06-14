@@ -83,7 +83,7 @@ scripts/      Despliegue (systemd, Docker, servicio Windows, tarea programada, b
 docs/         Especificación, plan, arquitectura y manuales
 tests/        Pruebas unitarias e integración E2E
 ```
-
+ 
 ## Desarrollo y pruebas
 
 ```bash
