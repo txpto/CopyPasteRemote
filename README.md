@@ -27,12 +27,12 @@ Máquina 1  ──Ctrl+Alt+2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2──
 
 | Documento | Contenido |
 |-----------|-----------|
-| [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Especificaciones técnicas del proyecto. |
-| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Plan de implementación. |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura, diagramas y topología (DD-WRT/ESXi). |
-| [docs/INSTALL.md](docs/INSTALL.md) | **Manual de instalación** (servidor y cliente). |
-| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **Manual de uso**. |
-| [docs/SECURITY.md](docs/SECURITY.md) | **Análisis de seguridad** y checklist de endurecimiento. |
+| [copypasteremote/docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Especificaciones técnicas del proyecto. |
+| [copypasteremote/docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Plan de implementación. |
+| [copypasteremote/docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura, diagramas y topología (DD-WRT/ESXi). |
+| [copypasteremote/docs/INSTALL.md](docs/INSTALL.md) | **Manual de instalación** (servidor y cliente). |
+| [copypasteremote/docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **Manual de uso**. |
+| [copypasteremote/docs/SECURITY.md](docs/SECURITY.md) | **Análisis de seguridad** y checklist de endurecimiento. |
 
 ## Inicio rápido
 
@@ -69,19 +69,19 @@ buzón N · **`Ctrl+Alt+V`** pega de tu buzón.
 Abre **`https://TU_IP_PUBLICA:8765/dashboard`** e introduce la `admin_api_key`
 (`admin_cli show-admin-key`). Verás máquinas conectadas, contenido compartido
 (origen → destino) y actividad en tiempo real. Detalles en
-[docs/INSTALL.md](docs/INSTALL.md) (Parte D).
+[copypasteremote/docs/INSTALL.md](copypasteremote/docs/INSTALL.md) (Parte D).
 
-![Dashboard de administración](docs/images/dashboard.png)
+![Dashboard de administración](copypasteremote/docs/images/dashboard.png)
 
 ## Estructura
 
 ```
-cpr_shared/   Librería común (cripto + protocolo)
-cpr_server/   Orquestador (FastAPI: REST + WebSocket, SQLite, dashboard, CLI admin, servicio Windows)
-cpr_client/   Agente Windows (portapapeles, atajos, bandeja, transporte, servicio Windows)
-scripts/      Despliegue (systemd, Docker, servicio Windows, tarea programada, build .exe)
-docs/         Especificación, plan, arquitectura y manuales
-tests/        Pruebas unitarias e integración E2E
+copypasteremote/cpr_shared/   Librería común (cripto + protocolo)
+copypasteremote/cpr_server/   Orquestador (FastAPI: REST + WebSocket, SQLite, dashboard, CLI admin, servicio Windows)
+copypasteremote/cpr_client/   Agente Windows (portapapeles, atajos, bandeja, transporte, servicio Windows)
+copypasteremote/scripts/      Despliegue (systemd, Docker, servicio Windows, tarea programada, build .exe)
+copypasteremote/docs/         Especificación, plan, arquitectura y manuales
+copypasteremote/tests/        Pruebas unitarias e integración E2E
 ```
 
 ## Desarrollo y pruebas
@@ -100,8 +100,8 @@ Windows.
 
 TLS en tránsito, autenticación por token y por máquina, cifrado del contenido con
 clave de pool, verificación de integridad SHA-256 y expiración automática de los
-buzones. Ver [docs/SPECIFICATION.md](docs/SPECIFICATION.md) §10 y
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §7.
+buzones. Ver [copypasteremote/docs/SPECIFICATION.md](docs/SPECIFICATION.md) §10 y
+[copypasteremote/docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §7.
 
 ## Licencia
 
