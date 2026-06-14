@@ -166,12 +166,13 @@ class RestClient:
         return dest_path
 
 
-def to_ws_url(base_url: str, slot: int, token: str) -> str:
+def to_ws_url(base_url: str) -> str:
+    """WebSocket URL WITHOUT credentials (auth goes in the Authorization header,
+    so the token never lands in URLs/proxy/access logs)."""
     parsed = urlparse(base_url.rstrip("/"))
     scheme = "wss" if parsed.scheme == "https" else "ws"
     path = (parsed.path or "") + "/api/ws"
-    query = "auth=%d.%s" % (slot, token)
-    return urlunparse((scheme, parsed.netloc, path, "", query, ""))
+    return urlunparse((scheme, parsed.netloc, path, "", "", ""))
 
 
 class WsClient:
@@ -193,7 +194,8 @@ class WsClient:
         ca_cert: str = "",
         reconnect_seconds: int = 5,
     ):
-        self.url = to_ws_url(base_url, slot, token)
+        self.url = to_ws_url(base_url)
+        self._auth_header = "Authorization: Bearer %d.%s" % (slot, token)
         self.slot = slot
         self.verify_tls = verify_tls
         self.ca_cert = ca_cert
@@ -236,6 +238,7 @@ class WsClient:
             try:
                 self._ws = websocket.WebSocketApp(
                     self.url,
+                    header=[self._auth_header],  # token in header, not in the URL
                     on_open=self._on_open,
                     on_message=self._on_message,
                     on_close=self._on_close,

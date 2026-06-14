@@ -38,7 +38,12 @@ def test_health_and_info(env):
     assert client.get("/api/health").json()["status"] == "ok"
     info = client.get("/api/info").json()
     assert info["app"] == "CopyPasteRemote"
-    assert info["pool_key_fp"]
+    assert info["version"]
+    # pool_key_fp is no longer disclosed publicly; it lives behind auth in /api/pool.
+    assert "pool_key_fp" not in info
+    bearer = _add_machine(client, 1, "PC-Casa")
+    pool = client.get("/api/pool", headers={"Authorization": "Bearer " + bearer}).json()
+    assert pool["pool_key_fp"]
 
 
 def test_admin_requires_key(env):

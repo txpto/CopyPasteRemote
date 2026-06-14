@@ -26,6 +26,13 @@ from .activity import ActivityLog
 from .config import ServerConfig
 from .dashboard import DASHBOARD_HTML
 from .presence import PresenceHub
+from .security import (
+    AuthRateLimiter,
+    BodySizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+    client_ip,
+    security_posture_warnings,
+)
 from .storage import Storage, StorageError
 
 log = logging.getLogger("cpr.server")
@@ -36,6 +43,7 @@ STORE: Storage
 HUB = PresenceHub()
 ACTIVITY = ActivityLog()
 STARTED_AT = time.time()
+RATE = AuthRateLimiter()
 
 
 # --------------------------------------------------------------------------- #
@@ -43,12 +51,17 @@ STARTED_AT = time.time()
 # --------------------------------------------------------------------------- #
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global CONFIG, STORE, STARTED_AT
+    global CONFIG, STORE, STARTED_AT, RATE
     CONFIG = app.state.config
     CONFIG.ensure_dirs()
     STORE = Storage(CONFIG.db_path, CONFIG.blobs_dir)
     app.state.store = STORE
     STARTED_AT = time.time()
+    RATE = AuthRateLimiter(
+        max_failures=CONFIG.auth_rate_max_failures,
+        window=CONFIG.auth_rate_window_seconds,
+        block=CONFIG.auth_rate_block_seconds,
+    )
 
     # Ensure there is an admin key; persist a generated one so it is stable.
     if not CONFIG.admin_api_key:
@@ -58,7 +71,11 @@ async def lifespan(app: FastAPI):
         else:
             CONFIG.admin_api_key = secrets.token_urlsafe(32)
             STORE.set_meta("admin_api_key", CONFIG.admin_api_key)
-            log.warning("Generated a new admin API key: %s", CONFIG.admin_api_key)
+            # Do NOT log the secret itself. Tell the admin how to retrieve it.
+            log.warning(
+                "No admin_api_key configured; generated one and stored it. "
+                "Retrieve it with: python -m cpr_server.admin_cli show-admin-key"
+            )
 
     # Record the pool key fingerprint (if a key is configured) so clients can
     # detect a mismatch without us ever storing the key when not needed.
@@ -68,6 +85,9 @@ async def lifespan(app: FastAPI):
             STORE.set_meta("pool_key_fp", fp)
         except crypto.CryptoError:
             log.error("Configured pool_key_b64 is invalid; ignoring it")
+
+    for warning in security_posture_warnings(CONFIG):
+        log.warning("SECURITY: %s", warning)
 
     maintenance_task = asyncio.create_task(_maintenance_loop())
     log.info("CopyPasteRemote server %s ready (crypto backend: %s)",
@@ -100,12 +120,21 @@ async def _maintenance_loop() -> None:
 
 # Single application instance. All route decorators below attach to it; tests and
 # run_server.py call create_app() to (re)point it at a specific config before use.
+_initial_config = ServerConfig.load()
 app = FastAPI(
     title="CopyPasteRemote Orchestrator",
     version=__version__,
     lifespan=lifespan,
+    # Info disclosure: optionally hide the interactive API docs in production.
+    docs_url="/docs" if _initial_config.enable_docs else None,
+    redoc_url="/redoc" if _initial_config.enable_docs else None,
+    openapi_url="/openapi.json" if _initial_config.enable_docs else None,
 )
-app.state.config = ServerConfig.load()
+app.state.config = _initial_config
+
+# Hardening middleware (pure ASGI so streaming blob downloads are not buffered).
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=_initial_config.max_request_bytes)
+app.add_middleware(SecurityHeadersMiddleware, hsts=_initial_config.hsts)
 
 
 def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
@@ -123,21 +152,35 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 # --------------------------------------------------------------------------- #
 # Dependencies
 # --------------------------------------------------------------------------- #
-def auth_machine(authorization: Optional[str] = Header(None)) -> authmod.AuthContext:
+def auth_machine(
+    request: Request, authorization: Optional[str] = Header(None)
+) -> authmod.AuthContext:
+    ip = client_ip(request, CONFIG.trust_proxy)
+    RATE.check(ip)  # 429 if this IP is locked out
     slot, token = authmod.parse_bearer(authorization)
     if not STORE.verify_token(slot, token):
+        RATE.record_failure(ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials for slot %d" % slot,
             headers={"WWW-Authenticate": "Bearer"},
         )
+    RATE.record_success(ip)
     STORE.touch_machine(slot)
     machine = STORE.get_machine(slot)
     return authmod.AuthContext(slot=slot, name=machine["name"] if machine else "")
 
 
-def auth_admin(x_admin_key: Optional[str] = Header(None)) -> None:
-    authmod.require_admin_key(x_admin_key, CONFIG.admin_api_key)
+def auth_admin(request: Request, x_admin_key: Optional[str] = Header(None)) -> None:
+    ip = client_ip(request, CONFIG.trust_proxy)
+    RATE.check(ip)
+    try:
+        authmod.require_admin_key(x_admin_key, CONFIG.admin_api_key)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_403_FORBIDDEN:
+            RATE.record_failure(ip)
+        raise
+    RATE.record_success(ip)
 
 
 # --------------------------------------------------------------------------- #
@@ -150,16 +193,12 @@ def health():
 
 @app.get("/api/info")
 def info():
+    # Public endpoint: keep it minimal to avoid information disclosure. Pool key
+    # fingerprint and limits are returned by the authenticated /api/pool instead.
     return {
         "app": "CopyPasteRemote",
         "version": __version__,
         "protocol": PROTOCOL_VERSION,
-        "pool_id": CONFIG.pool_id,
-        "pool_key_fp": STORE.get_meta("pool_key_fp"),
-        "crypto_backend": crypto.backend_name(),
-        "inline_threshold": protocol.INLINE_THRESHOLD,
-        "max_payload_bytes": CONFIG.max_payload_bytes,
-        "blob_chunk_size": CONFIG.blob_chunk_size,
     }
 
 
@@ -192,7 +231,18 @@ async def get_pool(ctx: authmod.AuthContext = Depends(auth_machine)):
                 "is_me": slot == ctx.slot,
             }
         )
-    return {"you": ctx.slot, "machines": machines}
+    return {
+        "you": ctx.slot,
+        "machines": machines,
+        # Moved here from the public /api/info (requires authentication now).
+        "pool_id": CONFIG.pool_id,
+        "pool_key_fp": STORE.get_meta("pool_key_fp"),
+        "crypto_backend": crypto.backend_name(),
+        "inline_threshold": protocol.INLINE_THRESHOLD,
+        "max_payload_bytes": CONFIG.max_payload_bytes,
+        "blob_chunk_size": CONFIG.blob_chunk_size,
+        "allow_cross_pull": CONFIG.allow_cross_pull,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -278,6 +328,10 @@ def pull_clip(
 ):
     if not protocol.valid_slot(slot):
         raise HTTPException(status_code=400, detail="Invalid slot")
+    if not CONFIG.allow_cross_pull and slot != ctx.slot:
+        raise HTTPException(
+            status_code=403, detail="Cross-mailbox reads are disabled; you may only read your own"
+        )
     row = STORE.get_slot(slot)
     if not row:
         raise HTTPException(status_code=404, detail="Mailbox %d is empty" % slot)
@@ -500,7 +554,23 @@ async def websocket_endpoint(ws: WebSocket):
 # --------------------------------------------------------------------------- #
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page():
-    return HTMLResponse(DASHBOARD_HTML)
+    # Strict, per-response CSP using a nonce (no 'unsafe-inline'). The inline
+    # <style>/<script> in the page get the same nonce.
+    nonce = secrets.token_urlsafe(16)
+    html = DASHBOARD_HTML.replace("<style>", '<style nonce="%s">' % nonce, 1).replace(
+        "<script>", '<script nonce="%s">' % nonce, 1
+    )
+    csp = (
+        "default-src 'none'; "
+        "style-src 'nonce-%s'; "
+        "script-src 'nonce-%s'; "
+        "connect-src 'self'; "
+        "img-src 'self' data:; "
+        "base-uri 'none'; "
+        "form-action 'none'; "
+        "frame-ancestors 'none'"
+    ) % (nonce, nonce)
+    return HTMLResponse(html, headers={"Content-Security-Policy": csp})
 
 
 @app.get("/api/admin/overview")

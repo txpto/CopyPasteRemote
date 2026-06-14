@@ -72,6 +72,16 @@ class ServerConfig:
     ws_ping_interval: int = 25               # seconds
     log_level: str = "info"
 
+    # Security hardening -----------------------------------------------------
+    enable_docs: bool = True                 # expose /docs, /redoc, /openapi.json
+    max_request_bytes: int = 16 * 1024 * 1024  # reject any single request body above this
+    trust_proxy: bool = False                # honour X-Forwarded-For (only behind a trusted proxy)
+    hsts: bool = True                        # send Strict-Transport-Security
+    allow_cross_pull: bool = True            # may a machine pull mailboxes other than its own?
+    auth_rate_max_failures: int = 15         # failed auths per window before lockout
+    auth_rate_window_seconds: int = 60
+    auth_rate_block_seconds: int = 300
+
     # Derived ----------------------------------------------------------------
     @property
     def db_path(self) -> str:
@@ -107,6 +117,11 @@ class ServerConfig:
         cfg.tls_certfile = os.environ.get("CPR_TLS_CERTFILE", cfg.tls_certfile)
         cfg.tls_keyfile = os.environ.get("CPR_TLS_KEYFILE", cfg.tls_keyfile)
         cfg.log_level = os.environ.get("CPR_LOG_LEVEL", cfg.log_level)
+        cfg.enable_docs = _env_bool("CPR_ENABLE_DOCS", cfg.enable_docs)
+        cfg.max_request_bytes = _env_int("CPR_MAX_REQUEST_BYTES", cfg.max_request_bytes)
+        cfg.trust_proxy = _env_bool("CPR_TRUST_PROXY", cfg.trust_proxy)
+        cfg.hsts = _env_bool("CPR_HSTS", cfg.hsts)
+        cfg.allow_cross_pull = _env_bool("CPR_ALLOW_CROSS_PULL", cfg.allow_cross_pull)
         return cfg
 
     def to_dict(self) -> Dict[str, Any]:
