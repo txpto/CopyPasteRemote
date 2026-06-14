@@ -207,7 +207,7 @@ def create_app(data_dir: Path, max_upload_bytes: int = 2 * 1024 * 1024 * 1024):
     def package_blob(slot: str) -> Any:
         machine = auth_machine()
         row = latest_package(machine, slot)
-        if row["package_type"] != PACKAGE_FILES or not row["blob_path"]:
+        if row["package_type"] == PACKAGE_TEXT or not row["blob_path"]:
             abort(404)
         return send_file(app.config["DATA_DIR"] / row["blob_path"], as_attachment=True, download_name=row["original_name"] or "clipboard.zip")
 
