@@ -70,6 +70,8 @@ Abre **`https://TU_IP_PUBLICA:8765/dashboard`** e introduce la `admin_api_key`
 (origen → destino) y actividad en tiempo real. Detalles en
 [docs/INSTALL.md](docs/INSTALL.md) (Parte D).
 
+![Dashboard de administración](docs/images/dashboard.png)
+
 ## Estructura
 
 ```
