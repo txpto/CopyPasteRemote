@@ -27,12 +27,12 @@ Máquina 1  ──Ctrl+Alt+2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2──
 
 | Documento | Contenido |
 |-----------|-----------|
-| [copypasteremote/docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Especificaciones técnicas del proyecto. |
-| [copypasteremote/docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Plan de implementación. |
-| [copypasteremote/docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura, diagramas y topología (DD-WRT/ESXi). |
-| [copypasteremote/docs/INSTALL.md](docs/INSTALL.md) | **Manual de instalación** (servidor y cliente). |
-| [copypasteremote/docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **Manual de uso**. |
-| [copypasteremote/docs/SECURITY.md](docs/SECURITY.md) | **Análisis de seguridad** y checklist de endurecimiento. |
+| [copypasteremote/docs/SPECIFICATION.md](copypasteremote/docs/SPECIFICATION.md) | Especificaciones técnicas del proyecto. |
+| [copypasteremote/docs/IMPLEMENTATION_PLAN.md](copypasteremote/docs/IMPLEMENTATION_PLAN.md) | Plan de implementación. |
+| [copypasteremote/docs/ARCHITECTURE.md](copypasteremote/docs/ARCHITECTURE.md) | Arquitectura, diagramas y topología (DD-WRT/ESXi). |
+| [copypasteremote/docs/INSTALL.md](copypasteremote/docs/INSTALL.md) | **Manual de instalación** (servidor y cliente). |
+| [copypasteremote/docs/USER_GUIDE.md](copypasteremote/docs/USER_GUIDE.md) | **Manual de uso**. |
+| [copypasteremote/docs/SECURITY.md](copypasteremote/docs/SECURITY.md) | **Análisis de seguridad** y checklist de endurecimiento. |
 
 ## Inicio rápido
 
@@ -69,9 +69,9 @@ buzón N · **`Ctrl+Alt+V`** pega de tu buzón.
 Abre **`https://TU_IP_PUBLICA:8765/dashboard`** e introduce la `admin_api_key`
 (`admin_cli show-admin-key`). Verás máquinas conectadas, contenido compartido
 (origen → destino) y actividad en tiempo real. Detalles en
-[copypasteremote/docs/INSTALL.md](copypasteremote/docs/INSTALL.md) (Parte D).
+[/copypasteremote/docs/INSTALL.md](/copypasteremote/docs/INSTALL.md) (Parte D).
 
-![Dashboard de administración](copypasteremote/docs/images/dashboard.png)
+![Dashboard de administración](/copypasteremote/docs/images/dashboard.png)
 
 ## Estructura
 
@@ -100,8 +100,8 @@ Windows.
 
 TLS en tránsito, autenticación por token y por máquina, cifrado del contenido con
 clave de pool, verificación de integridad SHA-256 y expiración automática de los
-buzones. Ver [copypasteremote/docs/SPECIFICATION.md](docs/SPECIFICATION.md) §10 y
-[copypasteremote/docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §7.
+buzones. Ver [/copypasteremote/docs/SPECIFICATION.md](docs/SPECIFICATION.md) §10 y
+[/copypasteremote/docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §7.
 
 ## Licencia
 
