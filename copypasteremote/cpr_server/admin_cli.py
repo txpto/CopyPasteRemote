@@ -90,7 +90,9 @@ def cmd_init(args, config: ServerConfig) -> int:
 def cmd_add_machine(args, config: ServerConfig) -> int:
     store = _store(config)
     try:
-        token = store.add_machine(args.slot, args.name, token=args.token)
+        token = store.add_machine(
+            args.slot, args.name, token=args.token, pool=args.pool or "default"
+        )
     except StorageError as exc:
         print("Error: %s" % exc, file=sys.stderr)
         store.close()
@@ -100,6 +102,7 @@ def cmd_add_machine(args, config: ServerConfig) -> int:
     print("Registered machine:")
     print("  slot   : %d" % args.slot)
     print("  name   : %s" % args.name)
+    print("  pool   : %s" % (args.pool or "default"))
     print("  token  : %s" % token)
     print("  bearer : %s" % bearer)
 
@@ -139,7 +142,8 @@ def cmd_list(args, config: ServerConfig) -> int:
     if not machines:
         print("No machines registered yet.")
         return 0
-    print("%-5s %-24s %-8s %-12s %s" % ("SLOT", "NAME", "ENABLED", "LAST_SEEN", "CREATED"))
+    print("%-5s %-20s %-12s %-8s %-12s %s"
+          % ("SLOT", "NAME", "POOL", "ENABLED", "LAST_SEEN", "CREATED"))
     import datetime
 
     for m in machines:
@@ -150,9 +154,44 @@ def cmd_list(args, config: ServerConfig) -> int:
         )
         created = datetime.datetime.fromtimestamp(m["created_at"]).strftime("%Y-%m-%d")
         print(
-            "%-5d %-24s %-8s %-12s %s"
-            % (m["id"], m["name"][:24], "yes" if m["enabled"] else "no", last, created)
+            "%-5d %-20s %-12s %-8s %-12s %s"
+            % (m["id"], m["name"][:20], (m.get("pool") or "default")[:12],
+               "yes" if m["enabled"] else "no", last, created)
         )
+    return 0
+
+
+def cmd_set_pool(args, config: ServerConfig) -> int:
+    store = _store(config)
+    try:
+        store.set_pool(args.slot, args.pool)
+    except StorageError as exc:
+        print("Error: %s" % exc, file=sys.stderr)
+        store.close()
+        return 2
+    store.close()
+    print("Slot %d moved to pool '%s'" % (args.slot, args.pool))
+    return 0
+
+
+def cmd_set_acl(args, config: ServerConfig) -> int:
+    def parse(spec):
+        if spec is None:
+            return None  # leave unchanged
+        spec = spec.strip()
+        if spec in ("", "open", "all"):
+            return []  # clear/open
+        return [int(x) for x in spec.replace(",", " ").split()]
+
+    store = _store(config)
+    try:
+        store.set_acl(args.slot, parse(args.push), parse(args.pull))
+    except StorageError as exc:
+        print("Error: %s" % exc, file=sys.stderr)
+        store.close()
+        return 2
+    store.close()
+    print("ACL updated for slot %d (push=%s pull=%s)" % (args.slot, args.push, args.pull))
     return 0
 
 
@@ -217,12 +256,24 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("add-machine", help="Register a machine in the pool")
     s.add_argument("--slot", type=int, required=True, help="Slot/mailbox number (1..255)")
     s.add_argument("--name", required=True, help="Human friendly name")
+    s.add_argument("--pool", default="default", help="Pool name (machines only see their pool)")
     s.add_argument("--token", help="Use a specific token (default: generate one)")
     s.add_argument("--client-config", help="Write a ready-to-use client config JSON here")
     s.set_defaults(func=cmd_add_machine)
 
     s = sub.add_parser("list", help="List registered machines")
     s.set_defaults(func=cmd_list)
+
+    s = sub.add_parser("set-pool", help="Move a machine to a different pool")
+    s.add_argument("--slot", type=int, required=True)
+    s.add_argument("--pool", required=True)
+    s.set_defaults(func=cmd_set_pool)
+
+    s = sub.add_parser("set-acl", help="Set per-mailbox ACLs (who may push/pull this mailbox)")
+    s.add_argument("--slot", type=int, required=True)
+    s.add_argument("--push", help="Slots allowed to push here: 'open' or e.g. '1,3,5'")
+    s.add_argument("--pull", help="Slots allowed to read here: 'open' or e.g. '1,3,5'")
+    s.set_defaults(func=cmd_set_acl)
 
     s = sub.add_parser("rotate", help="Rotate a machine's token")
     s.add_argument("--slot", type=int, required=True)

@@ -82,6 +82,10 @@ class ServerConfig:
     auth_rate_window_seconds: int = 60
     auth_rate_block_seconds: int = 300
 
+    # Clipboard history -----------------------------------------------------
+    history_max_entries: int = 25            # unpinned entries kept per mailbox
+    history_ttl_seconds: int = 7 * 24 * 3600  # unpinned history expiry (0 disables)
+
     # Derived ----------------------------------------------------------------
     @property
     def db_path(self) -> str:

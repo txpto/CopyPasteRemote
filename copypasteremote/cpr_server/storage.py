@@ -23,7 +23,10 @@ CREATE TABLE IF NOT EXISTS machines (
     token_hash  TEXT    NOT NULL,
     enabled     INTEGER NOT NULL DEFAULT 1,
     created_at  REAL    NOT NULL,
-    last_seen   REAL
+    last_seen   REAL,
+    pool        TEXT    NOT NULL DEFAULT 'default',
+    acl_push    TEXT,   -- JSON list of slots allowed to push here (NULL/[] = all in pool)
+    acl_pull    TEXT    -- JSON list of slots allowed to read here (NULL/[] = all in pool)
 );
 
 CREATE TABLE IF NOT EXISTS slots (
@@ -37,6 +40,21 @@ CREATE TABLE IF NOT EXISTS slots (
     from_id       INTEGER,
     updated_at    REAL
 );
+
+CREATE TABLE IF NOT EXISTS history (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    slot          INTEGER NOT NULL,      -- mailbox this entry belongs to
+    envelope_json TEXT,
+    inline_blob   BLOB,
+    blob_id       TEXT,
+    kind          TEXT,
+    size          INTEGER,
+    sha256        TEXT,
+    from_id       INTEGER,
+    pinned        INTEGER NOT NULL DEFAULT 0,
+    created_at    REAL
+);
+CREATE INDEX IF NOT EXISTS idx_history_slot ON history(slot, created_at);
 
 CREATE TABLE IF NOT EXISTS blobs (
     id          TEXT PRIMARY KEY,
@@ -54,6 +72,13 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 """
 
+# Columns added after 1.0; applied to pre-existing databases by _migrate().
+_MACHINE_MIGRATIONS = {
+    "pool": "ALTER TABLE machines ADD COLUMN pool TEXT NOT NULL DEFAULT 'default'",
+    "acl_push": "ALTER TABLE machines ADD COLUMN acl_push TEXT",
+    "acl_pull": "ALTER TABLE machines ADD COLUMN acl_pull TEXT",
+}
+
 
 class StorageError(Exception):
     pass
@@ -70,7 +95,15 @@ class Storage:
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(_SCHEMA)
+            self._migrate()
             self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Apply additive migrations to databases created by older versions."""
+        cols = {r["name"] for r in self._conn.execute("PRAGMA table_info(machines)")}
+        for name, ddl in _MACHINE_MIGRATIONS.items():
+            if name not in cols:
+                self._conn.execute(ddl)
 
     def close(self) -> None:
         with self._lock:
@@ -92,7 +125,9 @@ class Storage:
             self._conn.commit()
 
     # ------------------------------------------------------------- machines
-    def add_machine(self, slot: int, name: str, token: Optional[str] = None) -> str:
+    def add_machine(
+        self, slot: int, name: str, token: Optional[str] = None, pool: str = "default"
+    ) -> str:
         """Register a machine and return its (clear-text) auth token.
 
         The token is returned exactly once; only its hash is stored.
@@ -105,12 +140,41 @@ class Storage:
             if existing:
                 raise StorageError("Slot %d is already registered" % slot)
             self._conn.execute(
-                "INSERT INTO machines(id, name, token_hash, enabled, created_at) "
-                "VALUES(?, ?, ?, 1, ?)",
-                (slot, name, crypto.hash_token(token), time.time()),
+                "INSERT INTO machines(id, name, token_hash, enabled, created_at, pool) "
+                "VALUES(?, ?, ?, 1, ?, ?)",
+                (slot, name, crypto.hash_token(token), time.time(), pool or "default"),
             )
             self._conn.commit()
         return token
+
+    def set_pool(self, slot: int, pool: str) -> None:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE machines SET pool=? WHERE id=?", (pool or "default", slot)
+            )
+            if cur.rowcount == 0:
+                raise StorageError("No such machine: slot %d" % slot)
+            self._conn.commit()
+
+    def set_acl(self, slot: int, acl_push: Optional[list], acl_pull: Optional[list]) -> None:
+        """Set per-mailbox ACLs. ``None`` leaves a list unchanged; ``[]`` clears it."""
+        import json
+
+        with self._lock:
+            row = self._conn.execute("SELECT id FROM machines WHERE id=?", (slot,)).fetchone()
+            if not row:
+                raise StorageError("No such machine: slot %d" % slot)
+            if acl_push is not None:
+                self._conn.execute(
+                    "UPDATE machines SET acl_push=? WHERE id=?",
+                    (json.dumps(acl_push) if acl_push else None, slot),
+                )
+            if acl_pull is not None:
+                self._conn.execute(
+                    "UPDATE machines SET acl_pull=? WHERE id=?",
+                    (json.dumps(acl_pull) if acl_pull else None, slot),
+                )
+            self._conn.commit()
 
     def rotate_token(self, slot: int) -> str:
         token = secrets.token_urlsafe(32)
@@ -151,9 +215,14 @@ class Storage:
             row = self._conn.execute("SELECT * FROM machines WHERE id=?", (slot,)).fetchone()
             return dict(row) if row else None
 
-    def list_machines(self) -> List[Dict[str, Any]]:
+    def list_machines(self, pool: Optional[str] = None) -> List[Dict[str, Any]]:
         with self._lock:
-            rows = self._conn.execute("SELECT * FROM machines ORDER BY id").fetchall()
+            if pool is None:
+                rows = self._conn.execute("SELECT * FROM machines ORDER BY id").fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM machines WHERE pool=? ORDER BY id", (pool,)
+                ).fetchall()
             return [dict(r) for r in rows]
 
     def verify_token(self, slot: int, token: str) -> bool:
@@ -188,11 +257,6 @@ class Storage:
     ) -> None:
         now = time.time()
         with self._lock:
-            old = self._conn.execute(
-                "SELECT blob_id FROM slots WHERE id=?", (slot,)
-            ).fetchone()
-            old_blob = old["blob_id"] if old else None
-
             self._conn.execute(
                 "INSERT INTO slots(id, envelope_json, inline_blob, blob_id, kind, size, "
                 "sha256, from_id, updated_at) VALUES(?,?,?,?,?,?,?,?,?) "
@@ -203,29 +267,83 @@ class Storage:
                 (slot, envelope_json, inline_blob, blob_id, kind, size, sha256, from_id, now),
             )
             if blob_id:
-                self._conn.execute(
-                    "UPDATE blobs SET ref_slot=? WHERE id=?", (slot, blob_id)
-                )
+                self._conn.execute("UPDATE blobs SET ref_slot=? WHERE id=?", (slot, blob_id))
+            # Append the same item to history (the slot is just the latest entry).
+            self._conn.execute(
+                "INSERT INTO history(slot, envelope_json, inline_blob, blob_id, kind, size, "
+                "sha256, from_id, pinned, created_at) VALUES(?,?,?,?,?,?,?,?,0,?)",
+                (slot, envelope_json, inline_blob, blob_id, kind, size, sha256, from_id, now),
+            )
             self._conn.commit()
-
-            # The slot no longer points at the previous blob -> reclaim it.
-            if old_blob and old_blob != blob_id:
-                self._delete_blob_locked(old_blob)
+        # Blobs are shared by slot + history, so reclamation is by reference (gc).
 
     def get_slot(self, slot: int) -> Optional[Dict[str, Any]]:
         with self._lock:
             row = self._conn.execute("SELECT * FROM slots WHERE id=?", (slot,)).fetchone()
             return dict(row) if row else None
 
-    def clear_slot(self, slot: int) -> None:
+    def clear_slot(self, slot: int, clear_history: bool = False) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM slots WHERE id=?", (slot,))
+            if clear_history:
+                # Keep pinned entries even on an explicit clear.
+                self._conn.execute("DELETE FROM history WHERE slot=? AND pinned=0", (slot,))
+            self._conn.commit()
+        # Dereferenced blobs are reclaimed by gc_orphan_blobs().
+
+    # -------------------------------------------------------------- history
+    def list_history(self, slot: int, limit: int = 50) -> List[Dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, slot, kind, size, sha256, from_id, pinned, created_at, "
+                "(blob_id IS NOT NULL) AS has_blob FROM history "
+                "WHERE slot=? ORDER BY created_at DESC, id DESC LIMIT ?",
+                (slot, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_history(self, history_id: int) -> Optional[Dict[str, Any]]:
         with self._lock:
             row = self._conn.execute(
-                "SELECT blob_id FROM slots WHERE id=?", (slot,)
+                "SELECT * FROM history WHERE id=?", (history_id,)
             ).fetchone()
-            self._conn.execute("DELETE FROM slots WHERE id=?", (slot,))
+            return dict(row) if row else None
+
+    def set_pinned(self, history_id: int, pinned: bool) -> None:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE history SET pinned=? WHERE id=?", (1 if pinned else 0, history_id)
+            )
+            if cur.rowcount == 0:
+                raise StorageError("No such history entry: %d" % history_id)
             self._conn.commit()
-            if row and row["blob_id"]:
-                self._delete_blob_locked(row["blob_id"])
+
+    def trim_history(self, slot: int, keep: int) -> int:
+        """Keep the newest ``keep`` unpinned entries for a slot; pinned are always kept."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id FROM history WHERE slot=? AND pinned=0 "
+                "ORDER BY created_at DESC, id DESC",
+                (slot,),
+            ).fetchall()
+            to_delete = [r["id"] for r in rows[keep:]]
+            for hid in to_delete:
+                self._conn.execute("DELETE FROM history WHERE id=?", (hid,))
+            if to_delete:
+                self._conn.commit()
+            return len(to_delete)
+
+    def expire_history(self, ttl_seconds: int) -> int:
+        """Delete unpinned history entries older than ttl. Returns count removed."""
+        if ttl_seconds <= 0:
+            return 0
+        cutoff = time.time() - ttl_seconds
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM history WHERE pinned=0 AND created_at < ?", (cutoff,)
+            )
+            self._conn.commit()
+            return cur.rowcount
 
     # ---------------------------------------------------------------- blobs
     def create_blob(self) -> str:
@@ -321,19 +439,23 @@ class Storage:
         return removed
 
     def gc_orphan_blobs(self, ttl_seconds: int) -> int:
-        """Delete blobs that were never attached to a slot and are old/abandoned."""
+        """Delete blobs no longer referenced by any slot or history entry.
+
+        Also covers abandoned uploads (created but never attached). Only blobs
+        older than ttl are considered, so in-flight uploads are never reclaimed.
+        """
         cutoff = time.time() - ttl_seconds
-        removed = 0
         with self._lock:
             rows = self._conn.execute(
-                "SELECT id FROM blobs WHERE ref_slot IS NULL AND created_at < ?",
+                "SELECT id FROM blobs WHERE created_at < ? "
+                "AND id NOT IN (SELECT blob_id FROM slots WHERE blob_id IS NOT NULL) "
+                "AND id NOT IN (SELECT blob_id FROM history WHERE blob_id IS NOT NULL)",
                 (cutoff,),
             ).fetchall()
             ids = [r["id"] for r in rows]
         for blob_id in ids:
             self.delete_blob(blob_id)
-            removed += 1
-        return removed
+        return len(ids)
 
 
 def _sha256_file(path: str) -> str:
