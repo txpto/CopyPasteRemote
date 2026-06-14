@@ -66,6 +66,13 @@ class ClientConfig:
     # automatically (no hotkey, no paste) - a "follow my mailbox" mode.
     auto_apply_incoming: bool = False
 
+    # Continuous BIDIRECTIONAL sync: also watch the local clipboard and auto-push
+    # changes to peers. Combine with auto_apply_incoming for full two-way sync.
+    sync_enabled: bool = False
+    sync_peers: list = field(default_factory=list)  # target slots; empty = all in pool
+    sync_poll_interval: float = 0.8                 # clipboard poll seconds
+    sync_max_bytes: int = 5 * 1024 * 1024           # skip auto-syncing payloads above this (0 = no cap)
+
     # Misc -------------------------------------------------------------------
     temp_dir: str = ""                # where to materialise received files (blank = system temp)
     log_level: str = "info"

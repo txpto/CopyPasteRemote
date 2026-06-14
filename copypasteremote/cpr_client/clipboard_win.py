@@ -169,6 +169,13 @@ class WindowsClipboard(ClipboardBackend):
     def simulate_paste(self) -> None:
         _send_ctrl_key("v")
 
+    def change_token(self):
+        """Clipboard sequence number; bumps on every clipboard change (Win7+)."""
+        try:
+            return int(ctypes.windll.user32.GetClipboardSequenceNumber())
+        except Exception:
+            return None
+
 
 # --------------------------------------------------------------------------- #
 # Win32 helpers

@@ -38,13 +38,12 @@ Cada máquina tiene un **buzón** (mailbox) numerado. El usuario:
 
 > **Nota (post-1.0):** la hoja de ruta ya está implementada — además de Windows hay
 > **clientes Linux/macOS**, **historial con fijado**, **multi-pool y ACLs por buzón**,
-> **asistente gráfico** y **modo "seguir"** (auto-aplicar entrante). Ver
+> **asistente gráfico**, **modo "seguir"** (auto-aplicar entrante) y **sincronización
+> bidireccional continua** (`sync_enabled`). Ver
 > [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) §8.
 
 ### 2.2 Fuera de alcance
 
-- Sincronización **bidireccional continua** automática (hay push/pull explícito y un
-  modo "seguir" unidireccional sobre el buzón propio).
 - Sincronización de objetos OLE complejos o formatos propietarios de aplicaciones.
 - Federación entre varios servidores orquestadores.
 

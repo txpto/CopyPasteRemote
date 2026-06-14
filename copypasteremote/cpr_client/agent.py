@@ -50,6 +50,11 @@ class ClipboardBackend:
     def simulate_paste(self) -> None:
         """Optionally press Ctrl+V to paste what we just put on the clipboard."""
 
+    def change_token(self):
+        """Return a token that changes whenever the clipboard changes, or None
+        if unsupported (then a content signature is used instead)."""
+        return None
+
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -111,6 +116,10 @@ class Agent:
         self._materialised: List[tuple] = []  # (path, created_at)
         self._lock = threading.Lock()
         self._prefetched = {}  # slot -> (envelope, plaintext path/bytes)
+        # Bidirectional sync state.
+        self._sync = None
+        self._sync_recent = {}  # clip signature -> timestamp (echo-loop guard)
+        self._sync_lock = threading.Lock()
 
     def _init_temp_dir(self) -> str:
         base = self.config.temp_dir or os.path.join(tempfile.gettempdir(), "CopyPasteRemote")
@@ -134,9 +143,112 @@ class Agent:
         self.ws.start()
 
     def close(self) -> None:
+        self.disable_sync()
         if self.ws:
             self.ws.stop()
         self.cleanup_all_temp()
+
+    # -- bidirectional sync -------------------------------------------------
+    def enable_sync(self) -> None:
+        """Start watching the local clipboard and auto-pushing changes to peers."""
+        if self._sync is not None:
+            return
+        from .sync import ClipboardMonitor
+
+        self._sync = ClipboardMonitor(
+            backend=self.clipboard,
+            on_change=self._on_local_clip_change,
+            interval=getattr(self.config, "sync_poll_interval", 0.8),
+            signature_fn=self._current_clip_signature,
+        )
+        self._sync.start()
+        log.info("Bidirectional clipboard sync enabled (peers=%s)",
+                 self.config.sync_peers or "all in pool")
+
+    def disable_sync(self) -> None:
+        if self._sync is not None:
+            self._sync.stop()
+            self._sync = None
+
+    def _sync_targets(self) -> List[int]:
+        me = int(self.config.machine_id)
+        peers = self.config.sync_peers or []
+        if peers:
+            return [int(s) for s in peers if int(s) != me]
+        # No explicit list -> every other machine in my pool.
+        try:
+            pool = self.rest.get_pool()
+            return [m["slot"] for m in pool.get("machines", []) if m["slot"] != me]
+        except Exception:  # noqa: BLE001
+            return []
+
+    def _on_local_clip_change(self) -> None:
+        try:
+            clip = self.clipboard.read()
+        except Exception as exc:  # noqa: BLE001
+            log.debug("sync read failed: %s", exc)
+            return
+        if clip is None or clip.kind == protocol.KIND_EMPTY:
+            return
+        sig = self._clip_signature(clip)
+        if self._sync_is_recent(sig):
+            return  # we just applied/sent this; don't echo it back
+        targets = self._sync_targets()
+        if not targets:
+            return
+        self._sync_remember(sig)
+        try:
+            env = self.push_clip_to_targets(
+                clip, targets, max_bytes=getattr(self.config, "sync_max_bytes", 0)
+            )
+            if env is not None:
+                log.info("Synced %s to mailboxes %s", env.human_summary(), targets)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("sync push failed: %s", exc)
+
+    def _current_clip_signature(self) -> Optional[str]:
+        try:
+            return self._clip_signature(self.clipboard.read())
+        except Exception:  # noqa: BLE001
+            return None
+
+    @staticmethod
+    def _clip_signature(clip) -> Optional[str]:
+        if clip is None or clip.kind == protocol.KIND_EMPTY:
+            return None
+        h = hashlib.sha256()
+        h.update((clip.kind or "").encode())
+        if clip.kind == protocol.KIND_TEXT:
+            h.update(b"T" + (clip.text or "").encode("utf-8", "replace"))
+        elif clip.kind == protocol.KIND_HTML:
+            h.update(b"H" + (clip.html or "").encode("utf-8", "replace"))
+        elif clip.kind == protocol.KIND_IMAGE:
+            h.update(b"I" + hashlib.sha256(clip.image_png or b"").digest())
+        elif clip.kind == protocol.KIND_FILES:
+            parts = []
+            for p in sorted(clip.paths or []):
+                try:
+                    parts.append("%s:%d" % (os.path.basename(p), os.path.getsize(p)))
+                except OSError:
+                    parts.append(os.path.basename(p))
+            h.update(b"F" + "|".join(parts).encode("utf-8", "replace"))
+        return h.hexdigest()
+
+    def _sync_remember(self, sig: Optional[str]) -> None:
+        if not sig:
+            return
+        now = time.time()
+        with self._sync_lock:
+            self._sync_recent[sig] = now
+            for k in [k for k, v in self._sync_recent.items() if now - v > 15]:
+                self._sync_recent.pop(k, None)
+
+    def _sync_is_recent(self, sig: Optional[str]) -> bool:
+        if not sig:
+            return False
+        with self._sync_lock:
+            ts = self._sync_recent.get(sig)
+            return ts is not None and (time.time() - ts) < 15
 
     def check_server(self) -> dict:
         info = self.rest.info()
@@ -170,8 +282,45 @@ class Agent:
             self.events.on_error("Nothing to copy (clipboard is empty)")
             raise AgentError("Clipboard is empty")
 
+        env, cleanup = self._prepare_envelope(clip)
+        try:
+            self.rest.push_envelope(slot, env.to_dict())
+            self.events.on_pushed(slot, env)
+            log.info("Pushed %s to slot %d", env.human_summary(), slot)
+            return env
+        finally:
+            cleanup()
+
+    def push_clip_to_targets(self, clip, targets, max_bytes: int = 0) -> Optional[Envelope]:
+        """Serialize/encrypt a clip once and deliver it to several mailboxes.
+
+        Used by bidirectional sync. ``max_bytes`` (>0) skips payloads whose
+        logical size exceeds the cap. Returns the envelope, or None if skipped.
+        """
+        env, cleanup = self._prepare_envelope(clip, max_bytes=max_bytes)
+        if env is None:
+            return None
+        try:
+            for slot in targets:
+                try:
+                    self.rest.push_envelope(slot, env.to_dict())
+                except Exception as exc:  # noqa: BLE001
+                    log.debug("sync push to slot %s failed: %s", slot, exc)
+            return env
+        finally:
+            cleanup()
+
+    def _prepare_envelope(self, clip, max_bytes: int = 0):
+        """Serialize + encrypt a clip and upload its blob if needed.
+
+        Returns ``(envelope, cleanup_callable)`` ready to POST, or ``(None, noop)``
+        when ``max_bytes`` is exceeded.
+        """
         ser = serializer.serialize(clip, self.key, self.temp_dir)
         env = ser.envelope
+        if max_bytes and env.size > max_bytes:
+            ser.source.cleanup()
+            return None, (lambda: None)
 
         ct_fd, ct_path = tempfile.mkstemp(suffix=".enc", prefix="cpr_ct_", dir=self.temp_dir)
         os.close(ct_fd)
@@ -198,14 +347,16 @@ class Agent:
                 env.inline = False
                 env.blob_id = blob_id
                 env.data_b64 = None
-
-            self.rest.push_envelope(slot, env.to_dict())
-            self.events.on_pushed(slot, env)
-            log.info("Pushed %s to slot %d", env.human_summary(), slot)
-            return env
-        finally:
+        except Exception:
             serializer.FileSource(ct_path).cleanup()
             ser.source.cleanup()
+            raise
+
+        def cleanup():
+            serializer.FileSource(ct_path).cleanup()
+            ser.source.cleanup()
+
+        return env, cleanup
 
     # -- pull ---------------------------------------------------------------
     def pull(self, slot: int, auto_paste: Optional[bool] = None) -> ClipData:
@@ -226,6 +377,10 @@ class Agent:
             raise AgentError("Pool key mismatch")
 
         self.clipboard.write(clip)
+        # Record what we just wrote so the sync monitor doesn't re-broadcast it.
+        self._sync_remember(self._clip_signature(clip))
+        if self._sync is not None:
+            self._sync.note_self_write()
         default = self.config.auto_paste if paste_default is None else paste_default
         do_paste = default if auto_paste is None else auto_paste
         if do_paste:

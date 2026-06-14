@@ -150,6 +150,10 @@ def run_app(args) -> int:
         tray = None
         events = _ConsoleEvents()
 
+    # Bidirectional sync needs the incoming half too; enable it implicitly.
+    if cfg.sync_enabled:
+        cfg.auto_apply_incoming = True
+
     agent = Agent(cfg, clipboard, events=events)
     try:
         info = agent.check_server()
@@ -159,6 +163,8 @@ def run_app(args) -> int:
         # Keep running; the WS layer will keep retrying.
 
     agent.connect_ws()
+    if cfg.sync_enabled:
+        agent.enable_sync()
     hotkeys = HotkeyManager(
         cfg,
         on_push=agent.push,

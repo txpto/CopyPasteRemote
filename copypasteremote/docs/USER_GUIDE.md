@@ -94,22 +94,41 @@ Cada buzón guarda los **últimos elementos** recibidos (no solo el último). De
 bandeja, **History (my mailbox)** lista los recientes; selecciona uno para recuperarlo
 al portapapeles. Puedes **fijar** (📌) elementos para que **no caduquen**.
 
-### 5.2 Modo "seguir" (sincronización automática)
+### 5.2 Modo "seguir" (entrante automático)
 Activa `"auto_apply_incoming": true` en tu `config.json` para que **lo que llegue a tu
 buzón se ponga automáticamente en tu portapapeles** (sin pulsar atajo). Útil para
 "seguir" lo que otra máquina te envía. No pega solo; solo deja el contenido listo.
 
-### 5.3 Asistente gráfico de configuración
+### 5.3 Sincronización bidireccional continua
+Activa `"sync_enabled": true` para mantener el portapapeles **sincronizado en ambos
+sentidos**: además de aplicar lo entrante, el cliente **vigila tu portapapeles local** y
+**envía automáticamente** lo que copias a los peers configurados. Así, copiar en
+cualquier máquina lo replica en las demás, sin atajos.
+
+```json
+"sync_enabled": true,
+"sync_peers": [2, 3],          // buzones destino; vacío = todas las máquinas de tu pool
+"sync_poll_interval": 0.8,      // cada cuánto se revisa el portapapeles (s)
+"sync_max_bytes": 5242880       // no auto-sincronizar payloads mayores (0 = sin límite)
+```
+
+- Incluye **protección anti-bucles**: lo que acabas de recibir/enviar no se reenvía.
+- En Windows usa el contador de secuencia del portapapeles (eficiente); en Linux/macOS
+  detecta cambios por firma del contenido.
+- Puedes activarlo/desactivarlo al vuelo desde la bandeja (**Bidirectional sync**).
+- Combínalo con **pools** o **ACLs** para definir qué máquinas se sincronizan entre sí.
+
+### 5.4 Asistente gráfico de configuración
 Ejecuta `run_client.py --wizard` (o el `.exe --wizard`) para rellenar la configuración
 con un formulario y **probar la conexión** antes de guardar. Si arrancas el cliente sin
 configuración válida, el asistente se ofrece automáticamente.
 
-### 5.4 Clientes Linux y macOS
+### 5.5 Clientes Linux y macOS
 Además de Windows, el cliente funciona en **Linux** (instala `wl-clipboard` en Wayland o
 `xclip`/`xsel` en X11) y **macOS** (usa `pbcopy`/`pbpaste`/`osascript` ya incluidos).
 Texto en ambos; archivos/carpetas en Linux vía `text/uri-list` y en macOS vía AppleScript.
 
-### 5.5 Múltiples pools
+### 5.6 Múltiples pools
 Las máquinas pueden agruparse en **pools**: solo ves y compartes con máquinas de **tu
 mismo pool**. El administrador lo gestiona con `add-machine --pool`, `set-pool` y, para
 permisos finos por buzón, `set-acl` (quién puede enviarte/leerte).

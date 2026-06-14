@@ -180,6 +180,11 @@ class CprTray:
             pystray.MenuItem("Paste from", pystray.Menu(lambda: self._target_items("pull"))),
             pystray.MenuItem("Paste my mailbox", lambda i, it: self._do_pull_own()),
             pystray.MenuItem("History (my mailbox)", pystray.Menu(lambda: self._history_items())),
+            pystray.MenuItem(
+                "Bidirectional sync",
+                lambda i, it: self._toggle_sync(),
+                checked=lambda it: bool(self.agent and self.agent._sync is not None),
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Refresh pool", lambda i, it: self.refresh_pool()),
             pystray.MenuItem("Open config folder", lambda i, it: self._open_config_dir()),
@@ -214,6 +219,17 @@ class CprTray:
             args=(self.agent.pull_history, int(self.config.machine_id), history_id),
             daemon=True,
         ).start()
+
+    def _toggle_sync(self) -> None:
+        if not self.agent:
+            return
+        if self.agent._sync is not None:
+            self.agent.disable_sync()
+            self.notify("CopyPasteRemote", "Bidirectional sync OFF")
+        else:
+            self.config.auto_apply_incoming = True
+            self.agent.enable_sync()
+            self.notify("CopyPasteRemote", "Bidirectional sync ON")
 
     # -- actions (run off the UI thread to avoid blocking the menu) ---------
     def _do_push(self, slot: int) -> None:

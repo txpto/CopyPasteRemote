@@ -162,8 +162,12 @@ Todos los puntos previstos post-1.0 están implementados:
   conexión; `run_client.py --wizard` y auto-oferta cuando la config es inválida.
 - ✅ **Sincronización automática (modo "seguir")**: `auto_apply_incoming` aplica al
   portapapeles local el contenido que llega a tu buzón, vía notificación WebSocket.
+- ✅ **Sincronización bidireccional continua**: monitor del portapapeles local
+  (`sync.py`; nº de secuencia en Windows, firma de contenido en Linux/macOS) que
+  **auto-empuja** los cambios a los peers (`sync_enabled`/`sync_peers`), con
+  **prevención de bucles** (firma + "self-write") y cap de tamaño; conmutable desde la
+  bandeja. **Pruebas**: `test_sync.py`.
 
 ### Posibles ampliaciones futuras
 - Historial con vista previa de contenido en el dashboard.
 - ACLs con grupos/roles y federación entre servidores.
-- Sincronización bidireccional continua (no solo "seguir" entrante).
