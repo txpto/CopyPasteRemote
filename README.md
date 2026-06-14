@@ -100,8 +100,8 @@ Windows.
 
 TLS en tránsito, autenticación por token y por máquina, cifrado del contenido con
 clave de pool, verificación de integridad SHA-256 y expiración automática de los
-buzones. Ver [/copypasteremote/docs/SPECIFICATION.md](docs/SPECIFICATION.md) §10 y
-[/copypasteremote/docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §7.
+buzones. Ver [/copypasteremote/docs/SPECIFICATION.md](/copypasteremote/docs/SPECIFICATION.md) §10 y
+[/copypasteremote/docs/ARCHITECTURE.md](/copypasteremote/docs/ARCHITECTURE.md) §7.
 
 ## Licencia
 
