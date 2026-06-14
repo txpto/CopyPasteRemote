@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 import requests
 
 from . import winclip
-from .protocol import PACKAGE_FILES, PACKAGE_TEXT
+from .protocol import PACKAGE_CLIPBOARD, PACKAGE_FILES, PACKAGE_TEXT
 
 APP_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "CopyPasteRemote"
 CONFIG_PATH = APP_DIR / "config.json"
@@ -63,21 +63,31 @@ def upload_slot(slot: str) -> None:
     config = load_config()
     content = winclip.read_clipboard()
     sess = session(config)
+    upload_file = None
     if content["type"] == PACKAGE_TEXT:
         files = None
         data = {"package_type": PACKAGE_TEXT, "text": content.get("text", "")}
     else:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        zip_path = CACHE_DIR / ("upload_%s.zip" % next(tempfile._get_candidate_names()))
-        winclip.make_zip_from_paths(content["paths"], zip_path)  # type: ignore[arg-type]
-        files = {"blob": ("clipboard.zip", zip_path.open("rb"), "application/zip")}
-        data = {"package_type": PACKAGE_FILES, "original_name": "clipboard.zip"}
+        if content["type"] == PACKAGE_FILES:
+            upload_file = CACHE_DIR / ("upload_%s.zip" % next(tempfile._get_candidate_names()))
+            winclip.make_zip_from_paths(content["paths"], upload_file)  # type: ignore[arg-type]
+            data = {"package_type": PACKAGE_FILES, "original_name": "clipboard.zip"}
+            filename = "clipboard.zip"
+            mime_type = "application/zip"
+        else:
+            upload_file = CACHE_DIR / ("clipboard_%s.json" % next(tempfile._get_candidate_names()))
+            winclip.write_clipboard_snapshot_file(content, upload_file)
+            data = {"package_type": PACKAGE_CLIPBOARD, "original_name": "clipboard.json"}
+            filename = "clipboard.json"
+            mime_type = "application/json"
+        files = {"blob": (filename, upload_file.open("rb"), mime_type)}
     try:
         response = sess.post(server_url(config, "/api/slots/%s/package" % slot), data=data, files=files, timeout=300)
         response.raise_for_status()
         print("Uploaded slot %s: %s" % (slot, response.json()))
     finally:
-        if content["type"] == PACKAGE_FILES:
+        if files:
             files["blob"][1].close()  # type: ignore[index,union-attr]
 
 
@@ -96,10 +106,16 @@ def download_slot(slot: str) -> None:
     blob.raise_for_status()
     zip_path = CACHE_DIR / ("download_%s.zip" % package["id"])
     zip_path.write_bytes(blob.content)
-    paths = winclip.extract_zip_for_clipboard(zip_path, CACHE_DIR)
-    winclip.write_file_drop(paths)
+    if package["package_type"] == PACKAGE_FILES:
+        paths = winclip.extract_zip_for_clipboard(zip_path, CACHE_DIR)
+        winclip.write_file_drop(paths)
+        print("Downloaded files from slot %s to local clipboard" % slot)
+    elif package["package_type"] == PACKAGE_CLIPBOARD:
+        winclip.write_clipboard_snapshot(zip_path)
+        print("Downloaded generic clipboard snapshot from slot %s to local clipboard" % slot)
+    else:
+        raise RuntimeError("unsupported remote package type: %s" % package["package_type"])
     winclip.clean_cache(CACHE_DIR)
-    print("Downloaded files from slot %s to local clipboard" % slot)
 
 
 def cmd_copy(args: argparse.Namespace) -> None:

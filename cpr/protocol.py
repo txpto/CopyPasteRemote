@@ -8,7 +8,8 @@ from pathlib import Path
 
 PACKAGE_TEXT = "text"
 PACKAGE_FILES = "files"
-SUPPORTED_PACKAGE_TYPES = {PACKAGE_TEXT, PACKAGE_FILES}
+PACKAGE_CLIPBOARD = "clipboard"
+SUPPORTED_PACKAGE_TYPES = {PACKAGE_TEXT, PACKAGE_FILES, PACKAGE_CLIPBOARD}
 
 
 def new_token(prefix: str) -> str:

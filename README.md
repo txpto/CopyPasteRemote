@@ -1,6 +1,6 @@
 # CopyPasteRemote
 
-CopyPasteRemote is a Python 3.8-compatible project for a Windows virtual clipboard pool coordinated by a relay server hosted on your private-cloud VM behind DD-WRT/ESXi. It lets registered Windows machines exchange clipboard text, files, and folders over the internet, regardless of whether they are on the same LAN.
+CopyPasteRemote is a Python 3.8-compatible project for a Windows virtual clipboard pool coordinated by a relay server hosted on your private-cloud VM behind DD-WRT/ESXi. It lets registered Windows machines exchange clipboard text, files, folders, and many application-specific clipboard formats over the internet, regardless of whether they are on the same LAN.
 
 > Target clients: Windows 7 x64, Windows 10/11, Windows Server 2016/2022. Use Python 3.8.x on Windows 7.
 
@@ -18,7 +18,7 @@ The Director VM is the single rendezvous point. Clients never need inbound ports
 
 * **Pool**: trusted group of machines sharing a virtual clipboard.
 * **Machine enrollment**: an administrator creates an enrollment code on the Director; the Windows client redeems it once and receives a persistent machine token.
-* **Clipboard package**: versioned payload containing either text or a zipped file/folder selection plus metadata.
+* **Clipboard package**: versioned payload containing text, a zipped file/folder selection, or a generic multi-format clipboard snapshot plus metadata.
 * **Slots**: numbered remote clipboards. For example, slot `1` can represent machine/source 1, slot `2` another source, or simply named buffers.
 
 ## Technical specification
@@ -29,6 +29,7 @@ The Director VM is the single rendezvous point. Clients never need inbound ports
 2. Capture native Windows clipboard content for:
    * Unicode text.
    * Files and folders copied in Explorer (`CF_HDROP`).
+   * Generic serializable clipboard formats such as HTML, RTF, PNG/app-specific binary payloads, and other registered formats when Windows exposes them as bytes or strings.
 3. Transfer clipboard packages through a public HTTPS endpoint on the Director VM.
 4. Restore clipboard content on another Windows client so normal `Ctrl+V` works in target applications.
 5. Keep all client connections outbound to support NAT, different networks, and mobile users.
@@ -80,8 +81,11 @@ The Director VM is the single rendezvous point. Clients never need inbound ports
 * Add upload/download commands for slots.
 * Capture text via `pywin32` clipboard APIs.
 * Capture Explorer file/folder selections via `CF_HDROP`, zip them, and upload.
+* Capture generic serializable clipboard formats as a JSON snapshot so rich content can be moved when both machines have compatible applications.
+* Preserve empty directories inside transferred folder trees.
 * Restore text to `CF_UNICODETEXT`.
 * Restore files/folders by downloading zip to a local cache, extracting it, and setting `CF_HDROP` so Explorer/app paste works like native Windows file copy.
+* Restore generic registered clipboard formats by re-registering format names and putting their byte/string payloads back on the Windows clipboard.
 
 ### Phase 3 - Hotkeys and service mode
 
@@ -148,13 +152,13 @@ python -m cpr.client paste --slot 1
 
 ## Usage manual
 
-1. Copy text, files, or folders normally on PC A using Windows Explorer or an application.
+1. Copy text, files, folders, images, rich text, or application content normally on PC A using Windows Explorer or an application.
 2. Press `Ctrl+Alt+1` on PC A to upload the current local clipboard to virtual slot 1.
 3. Go to PC B.
 4. Press `Ctrl+Shift+1` on PC B to download slot 1 into the local Windows clipboard.
-5. Press normal `Ctrl+V` in the destination app/folder.
+5. Press normal `Ctrl+V` in the destination app/folder. For generic/rich clipboard formats, use the same or a compatible application on the target PC.
 
-Repeat with slot 2, 3, etc. Slots are shared buffers, not hard-coded machine IDs, so you can choose the workflow that best fits your team.
+Repeat with slot 2, 3, etc. Slots are shared buffers, not hard-coded machine IDs, so you can choose the workflow that best fits your team. The implementation prioritizes native Windows behavior for text and files/folders and adds a best-effort generic snapshot layer for rich/application formats; formats backed by process-local handles, device contexts, or unsupported Windows handles may still need app-specific plugins.
 
 ## Repository layout
 
