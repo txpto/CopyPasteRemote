@@ -15,14 +15,16 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from cpr_shared import crypto, protocol
 from cpr_shared.version import __version__, PROTOCOL_VERSION
 
 from . import auth as authmod
+from .activity import ActivityLog
 from .config import ServerConfig
+from .dashboard import DASHBOARD_HTML
 from .presence import PresenceHub
 from .storage import Storage, StorageError
 
@@ -32,6 +34,8 @@ log = logging.getLogger("cpr.server")
 CONFIG: ServerConfig
 STORE: Storage
 HUB = PresenceHub()
+ACTIVITY = ActivityLog()
+STARTED_AT = time.time()
 
 
 # --------------------------------------------------------------------------- #
@@ -39,11 +43,12 @@ HUB = PresenceHub()
 # --------------------------------------------------------------------------- #
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global CONFIG, STORE
+    global CONFIG, STORE, STARTED_AT
     CONFIG = app.state.config
     CONFIG.ensure_dirs()
     STORE = Storage(CONFIG.db_path, CONFIG.blobs_dir)
     app.state.store = STORE
+    STARTED_AT = time.time()
 
     # Ensure there is an admin key; persist a generated one so it is stable.
     if not CONFIG.admin_api_key:
@@ -162,7 +167,7 @@ def info():
 def root():
     return (
         "CopyPasteRemote orchestrator %s is running.\n"
-        "See /docs for the API and the project README for setup.\n" % __version__
+        "Admin dashboard: /dashboard   API docs: /docs\n" % __version__
     )
 
 
@@ -251,6 +256,17 @@ async def push_clip(
             "summary": env.human_summary(),
         },
     )
+    dest = STORE.get_machine(slot)
+    ACTIVITY.add(
+        "push",
+        from_id=ctx.slot,
+        from_name=ctx.name,
+        slot=slot,
+        dest_name=dest["name"] if dest else None,
+        kind=env.kind,
+        size=env.size,
+        summary=env.human_summary(),
+    )
     return {"ok": True, "slot": slot, "kind": env.kind, "size": env.size}
 
 
@@ -281,6 +297,9 @@ def pull_clip(
         env.inline = False
         env.data_b64 = None
         env.blob_id = row["blob_id"]
+    ACTIVITY.add(
+        "pull", by=ctx.slot, by_name=ctx.name, slot=slot, kind=env.kind, size=env.size
+    )
     return env.to_dict()
 
 
@@ -289,6 +308,7 @@ def clear_clip(slot: int, ctx: authmod.AuthContext = Depends(auth_machine)):
     if not protocol.valid_slot(slot):
         raise HTTPException(status_code=400, detail="Invalid slot")
     STORE.clear_slot(slot)
+    ACTIVITY.add("clear", by=ctx.slot, by_name=ctx.name, slot=slot)
     return {"ok": True, "slot": slot}
 
 
@@ -429,9 +449,12 @@ async def websocket_endpoint(ws: WebSocket):
 
     await ws.accept()
     STORE.touch_machine(slot)
+    machine = STORE.get_machine(slot)
+    machine_name = machine["name"] if machine else str(slot)
     came_online = await HUB.connect(slot, ws)
     if came_online:
         await HUB.announce_presence(slot, True)
+        ACTIVITY.add("connect", slot=slot, name=machine_name)
 
     # Greet with a pool snapshot so the client UI is immediately populated.
     online = set(await HUB.online_slots())
@@ -469,6 +492,78 @@ async def websocket_endpoint(ws: WebSocket):
         now_offline = await HUB.disconnect(slot, ws)
         if now_offline:
             await HUB.announce_presence(slot, False)
+            ACTIVITY.add("disconnect", slot=slot, name=machine_name)
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard (HTML) + admin data endpoints
+# --------------------------------------------------------------------------- #
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page():
+    return HTMLResponse(DASHBOARD_HTML)
+
+
+@app.get("/api/admin/overview")
+async def admin_overview(_: None = Depends(auth_admin)):
+    online = set(await HUB.online_slots())
+    machines = []
+    mailboxes = []
+    clip_count = 0
+    for m in STORE.list_machines():
+        slot = m["id"]
+        row = STORE.get_slot(slot)
+        has_clip = row is not None
+        if has_clip:
+            clip_count += 1
+            env = protocol.Envelope.from_json(row["envelope_json"])
+            mailboxes.append(
+                {
+                    "slot": slot,
+                    "dest_name": m["name"],
+                    "from_id": env.from_id,
+                    "from_name": env.from_name,
+                    "kind": env.kind,
+                    "size": env.size,
+                    "summary": env.human_summary(),
+                    "updated_at": row["updated_at"],
+                    "inline": row["inline_blob"] is not None,
+                }
+            )
+        machines.append(
+            {
+                "slot": slot,
+                "name": m["name"],
+                "enabled": bool(m["enabled"]),
+                "online": slot in online,
+                "last_seen": m["last_seen"],
+                "created_at": m["created_at"],
+                "has_clip": has_clip,
+            }
+        )
+    return {
+        "server": {
+            "app": "CopyPasteRemote",
+            "version": __version__,
+            "protocol": PROTOCOL_VERSION,
+            "uptime_seconds": time.time() - STARTED_AT,
+            "started_at": STARTED_AT,
+            "crypto_backend": crypto.backend_name(),
+            "pool_id": CONFIG.pool_id,
+            "pool_key_fp": STORE.get_meta("pool_key_fp"),
+            "slot_ttl_seconds": CONFIG.slot_ttl_seconds,
+            "max_payload_bytes": CONFIG.max_payload_bytes,
+            "machine_count": len(machines),
+            "online_count": len(online),
+            "clip_count": clip_count,
+        },
+        "machines": machines,
+        "mailboxes": mailboxes,
+    }
+
+
+@app.get("/api/admin/activity")
+def admin_activity(since: int = 0, limit: int = 200, _: None = Depends(auth_admin)):
+    return {"events": ACTIVITY.recent(since_seq=since, limit=limit), "last_seq": ACTIVITY.last_seq}
 
 
 # --------------------------------------------------------------------------- #
