@@ -109,9 +109,13 @@ async def _maintenance_loop() -> None:
         try:
             await asyncio.sleep(300)  # every 5 minutes
             removed = STORE.expire_slots(CONFIG.slot_ttl_seconds)
+            hist = STORE.expire_history(CONFIG.history_ttl_seconds)
             orphans = STORE.gc_orphan_blobs(CONFIG.orphan_blob_ttl_seconds)
-            if removed or orphans:
-                log.info("Maintenance: purged %d slots, %d orphan blobs", removed, orphans)
+            if removed or orphans or hist:
+                log.info(
+                    "Maintenance: purged %d slots, %d history, %d orphan blobs",
+                    removed, hist, orphans,
+                )
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -168,7 +172,37 @@ def auth_machine(
     RATE.record_success(ip)
     STORE.touch_machine(slot)
     machine = STORE.get_machine(slot)
-    return authmod.AuthContext(slot=slot, name=machine["name"] if machine else "")
+    return authmod.AuthContext(
+        slot=slot,
+        name=machine["name"] if machine else "",
+        pool=(machine.get("pool") if machine else "default") or "default",
+    )
+
+
+def _acl_allows(machine: dict, key: str, actor_slot: int) -> bool:
+    """Per-mailbox ACL check. Empty/missing list = open within the pool."""
+    raw = machine.get(key)
+    if not raw:
+        return True
+    try:
+        import json
+
+        allowed = json.loads(raw)
+    except Exception:
+        return True
+    return not allowed or actor_slot in allowed
+
+
+def _require_same_pool_and_acl(target_slot: int, ctx: "authmod.AuthContext", acl_key: str):
+    """Return the target machine after checking it exists, shares the pool and ACL."""
+    machine = STORE.get_machine(target_slot)
+    if machine is None:
+        raise HTTPException(status_code=404, detail="Target slot %d is not registered" % target_slot)
+    if (machine.get("pool") or "default") != ctx.pool:
+        raise HTTPException(status_code=403, detail="Target is in a different pool")
+    if target_slot != ctx.slot and not _acl_allows(machine, acl_key, ctx.slot):
+        raise HTTPException(status_code=403, detail="Not allowed by mailbox ACL")
+    return machine
 
 
 def auth_admin(request: Request, x_admin_key: Optional[str] = Header(None)) -> None:
@@ -215,9 +249,9 @@ def root():
 # --------------------------------------------------------------------------- #
 @app.get("/api/pool")
 async def get_pool(ctx: authmod.AuthContext = Depends(auth_machine)):
-    online = set(await HUB.online_slots())
+    online = set(await HUB.online_slots(ctx.pool))
     machines = []
-    for m in STORE.list_machines():
+    for m in STORE.list_machines(pool=ctx.pool):  # only peers in my pool
         slot = m["id"]
         has_clip = STORE.get_slot(slot) is not None
         machines.append(
@@ -233,6 +267,7 @@ async def get_pool(ctx: authmod.AuthContext = Depends(auth_machine)):
         )
     return {
         "you": ctx.slot,
+        "pool": ctx.pool,
         "machines": machines,
         # Moved here from the public /api/info (requires authentication now).
         "pool_id": CONFIG.pool_id,
@@ -254,8 +289,7 @@ async def push_clip(
 ):
     if not protocol.valid_slot(slot):
         raise HTTPException(status_code=400, detail="Invalid slot")
-    if STORE.get_machine(slot) is None:
-        raise HTTPException(status_code=404, detail="Target slot %d is not registered" % slot)
+    _require_same_pool_and_acl(slot, ctx, "acl_push")
 
     body = await request.json()
     env = protocol.Envelope.from_dict(body)
@@ -294,6 +328,7 @@ async def push_clip(
         inline_blob=inline_bytes,
         blob_id=blob_id,
     )
+    STORE.trim_history(slot, CONFIG.history_max_entries)
 
     # Notify the mailbox owner so it can pre-fetch for an instant paste.
     await HUB.notify_clip_available(
@@ -332,15 +367,26 @@ def pull_clip(
         raise HTTPException(
             status_code=403, detail="Cross-mailbox reads are disabled; you may only read your own"
         )
+    _require_same_pool_and_acl(slot, ctx, "acl_pull")
     row = STORE.get_slot(slot)
     if not row:
         raise HTTPException(status_code=404, detail="Mailbox %d is empty" % slot)
 
+    env = _row_to_envelope(row, meta_only=meta_only)
+    if not meta_only:
+        ACTIVITY.add(
+            "pull", by=ctx.slot, by_name=ctx.name, slot=slot, kind=env.kind, size=env.size
+        )
+    return env.to_dict()
+
+
+def _row_to_envelope(row, meta_only: bool = False) -> protocol.Envelope:
+    """Build an Envelope from a slots/history row (same column shape)."""
     env = protocol.Envelope.from_json(row["envelope_json"])
     if meta_only:
         env.data_b64 = None
-        return env.to_dict()
-
+        env.inline = row["inline_blob"] is not None
+        return env
     if row["inline_blob"] is not None:
         import base64
 
@@ -351,10 +397,59 @@ def pull_clip(
         env.inline = False
         env.data_b64 = None
         env.blob_id = row["blob_id"]
-    ACTIVITY.add(
-        "pull", by=ctx.slot, by_name=ctx.name, slot=slot, kind=env.kind, size=env.size
-    )
+    return env
+
+
+# --------------------------------------------------------------------------- #
+# Clipboard history (last N items per mailbox + pin)
+# --------------------------------------------------------------------------- #
+@app.get("/api/clip/{slot}/history")
+def get_history(slot: int, limit: int = 50, ctx: authmod.AuthContext = Depends(auth_machine)):
+    if not protocol.valid_slot(slot):
+        raise HTTPException(status_code=400, detail="Invalid slot")
+    if not CONFIG.allow_cross_pull and slot != ctx.slot:
+        raise HTTPException(status_code=403, detail="Cross-mailbox reads are disabled")
+    _require_same_pool_and_acl(slot, ctx, "acl_pull")
+    entries = STORE.list_history(slot, limit=min(max(1, limit), 200))
+    names = {m["id"]: m["name"] for m in STORE.list_machines(pool=ctx.pool)}
+    for e in entries:
+        e["from_name"] = names.get(e.get("from_id"))
+        e["pinned"] = bool(e["pinned"])
+        e["has_blob"] = bool(e["has_blob"])
+    return {"slot": slot, "entries": entries}
+
+
+@app.get("/api/clip/{slot}/history/{history_id}")
+def get_history_entry(
+    slot: int, history_id: int, ctx: authmod.AuthContext = Depends(auth_machine)
+):
+    if not CONFIG.allow_cross_pull and slot != ctx.slot:
+        raise HTTPException(status_code=403, detail="Cross-mailbox reads are disabled")
+    _require_same_pool_and_acl(slot, ctx, "acl_pull")
+    row = STORE.get_history(history_id)
+    if not row or row["slot"] != slot:
+        raise HTTPException(status_code=404, detail="No such history entry")
+    env = _row_to_envelope(row)
+    ACTIVITY.add("pull", by=ctx.slot, by_name=ctx.name, slot=slot, kind=env.kind, size=env.size)
     return env.to_dict()
+
+
+@app.post("/api/clip/{slot}/history/{history_id}/pin")
+async def pin_history_entry(
+    slot: int, history_id: int, request: Request, ctx: authmod.AuthContext = Depends(auth_machine)
+):
+    _require_same_pool_and_acl(slot, ctx, "acl_pull")
+    row = STORE.get_history(history_id)
+    if not row or row["slot"] != slot:
+        raise HTTPException(status_code=404, detail="No such history entry")
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    pinned = bool(body.get("pinned", True)) if isinstance(body, dict) else True
+    STORE.set_pinned(history_id, pinned)
+    return {"history_id": history_id, "pinned": pinned}
 
 
 @app.delete("/api/clip/{slot}")
@@ -505,13 +600,14 @@ async def websocket_endpoint(ws: WebSocket):
     STORE.touch_machine(slot)
     machine = STORE.get_machine(slot)
     machine_name = machine["name"] if machine else str(slot)
-    came_online = await HUB.connect(slot, ws)
+    pool = (machine.get("pool") if machine else "default") or "default"
+    came_online = await HUB.connect(slot, ws, pool=pool)
     if came_online:
-        await HUB.announce_presence(slot, True)
+        await HUB.announce_presence(slot, True, pool=pool)
         ACTIVITY.add("connect", slot=slot, name=machine_name)
 
-    # Greet with a pool snapshot so the client UI is immediately populated.
-    online = set(await HUB.online_slots())
+    # Greet with a pool snapshot (same pool only) so the client UI is populated.
+    online = set(await HUB.online_slots(pool))
     machines = [
         {
             "slot": m["id"],
@@ -519,7 +615,7 @@ async def websocket_endpoint(ws: WebSocket):
             "online": m["id"] in online,
             "enabled": bool(m["enabled"]),
         }
-        for m in STORE.list_machines()
+        for m in STORE.list_machines(pool=pool)
     ]
     await ws.send_text(
         protocol.ws_message(protocol.WS_HELLO, you=slot, machines=machines, version=__version__)
@@ -545,7 +641,7 @@ async def websocket_endpoint(ws: WebSocket):
     finally:
         now_offline = await HUB.disconnect(slot, ws)
         if now_offline:
-            await HUB.announce_presence(slot, False)
+            await HUB.announce_presence(slot, False, pool=pool)
             ACTIVITY.add("disconnect", slot=slot, name=machine_name)
 
 
@@ -603,6 +699,7 @@ async def admin_overview(_: None = Depends(auth_admin)):
             {
                 "slot": slot,
                 "name": m["name"],
+                "pool": m.get("pool") or "default",
                 "enabled": bool(m["enabled"]),
                 "online": slot in online,
                 "last_seen": m["last_seen"],
@@ -647,6 +744,7 @@ def admin_list_machines(_: None = Depends(auth_admin)):
             {
                 "slot": m["id"],
                 "name": m["name"],
+                "pool": m.get("pool") or "default",
                 "enabled": bool(m["enabled"]),
                 "created_at": m["created_at"],
                 "last_seen": m["last_seen"],
@@ -660,20 +758,44 @@ async def admin_add_machine(request: Request, _: None = Depends(auth_admin)):
     body = await request.json()
     slot = body.get("slot")
     name = body.get("name")
+    pool = body.get("pool") or "default"
     if not protocol.valid_slot(slot):
         raise HTTPException(status_code=400, detail="slot must be 1..255")
     if not name:
         raise HTTPException(status_code=400, detail="name is required")
     try:
-        token = STORE.add_machine(int(slot), str(name))
+        token = STORE.add_machine(int(slot), str(name), pool=str(pool))
     except StorageError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     return {
         "slot": slot,
         "name": name,
+        "pool": pool,
         "token": token,
         "bearer": authmod.make_bearer(int(slot), token),
     }
+
+
+@app.post("/api/admin/machines/{slot}/acl")
+async def admin_set_acl(slot: int, request: Request, _: None = Depends(auth_admin)):
+    body = await request.json()
+    # null = leave unchanged; [] = clear (open); [slots...] = restrict.
+    try:
+        STORE.set_acl(slot, body.get("acl_push"), body.get("acl_pull"))
+    except StorageError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"slot": slot, "ok": True}
+
+
+@app.post("/api/admin/machines/{slot}/pool")
+async def admin_set_pool(slot: int, request: Request, _: None = Depends(auth_admin)):
+    body = await request.json()
+    pool = body.get("pool") or "default"
+    try:
+        STORE.set_pool(slot, str(pool))
+    except StorageError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"slot": slot, "pool": pool}
 
 
 @app.post("/api/admin/machines/{slot}/rotate")

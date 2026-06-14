@@ -41,9 +41,10 @@ def make_bearer(slot: int, token: str) -> str:
 class AuthContext:
     """Resolved identity attached to an authenticated request."""
 
-    def __init__(self, slot: int, name: str):
+    def __init__(self, slot: int, name: str, pool: str = "default"):
         self.slot = slot
         self.name = name
+        self.pool = pool
 
 
 def require_admin_key(provided: Optional[str], configured: str) -> None:

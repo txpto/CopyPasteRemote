@@ -87,14 +87,42 @@ Ejemplo: cambiar el envío a la máquina 2 a `Ctrl+Alt+F2` y añadir un buzón 4
 "pull_hotkeys": { "1": "ctrl+shift+1", "2": "ctrl+shift+f2", "4": "ctrl+shift+4" }
 ```
 
-## 5. Buenas prácticas
+## 5. Funciones avanzadas
+
+### 5.1 Historial y "fijar"
+Cada buzón guarda los **últimos elementos** recibidos (no solo el último). Desde la
+bandeja, **History (my mailbox)** lista los recientes; selecciona uno para recuperarlo
+al portapapeles. Puedes **fijar** (📌) elementos para que **no caduquen**.
+
+### 5.2 Modo "seguir" (sincronización automática)
+Activa `"auto_apply_incoming": true` en tu `config.json` para que **lo que llegue a tu
+buzón se ponga automáticamente en tu portapapeles** (sin pulsar atajo). Útil para
+"seguir" lo que otra máquina te envía. No pega solo; solo deja el contenido listo.
+
+### 5.3 Asistente gráfico de configuración
+Ejecuta `run_client.py --wizard` (o el `.exe --wizard`) para rellenar la configuración
+con un formulario y **probar la conexión** antes de guardar. Si arrancas el cliente sin
+configuración válida, el asistente se ofrece automáticamente.
+
+### 5.4 Clientes Linux y macOS
+Además de Windows, el cliente funciona en **Linux** (instala `wl-clipboard` en Wayland o
+`xclip`/`xsel` en X11) y **macOS** (usa `pbcopy`/`pbpaste`/`osascript` ya incluidos).
+Texto en ambos; archivos/carpetas en Linux vía `text/uri-list` y en macOS vía AppleScript.
+
+### 5.5 Múltiples pools
+Las máquinas pueden agruparse en **pools**: solo ves y compartes con máquinas de **tu
+mismo pool**. El administrador lo gestiona con `add-machine --pool`, `set-pool` y, para
+permisos finos por buzón, `set-acl` (quién puede enviarte/leerte).
+
+## 6. Buenas prácticas
 
 - Numera las máquinas de forma estable (el `slot` no debería cambiar).
 - Si compartes datos sensibles, recuerda que **otros miembros del pool** pueden leer
-  cualquier buzón (comparten la clave). Crea pools separados si necesitas aislar.
+  cualquier buzón (comparten la clave). Usa **pools separados** o **ACLs** para aislar.
 - El contenido de los buzones **caduca** (24 h por defecto): no lo uses como almacén.
+  Usa **fijar** para conservar elementos del historial.
 
-## 6. Solución de problemas
+## 7. Solución de problemas
 
 | Síntoma | Causa probable / solución |
 |---------|---------------------------|
@@ -108,7 +136,7 @@ Ejemplo: cambiar el envío a la máquina 2 a `Ctrl+Alt+F2` y añadir un buzón 4
 | Texto con acentos raros | No debería ocurrir (UTF-8). Si pasa, reporta el caso con `log_level: debug`. |
 | Quiero ver detalles | Pon `log_level: debug` y `log_file` a una ruta; reproduce el problema y revisa el log. |
 
-### 6.1 Diagnóstico rápido
+### 7.1 Diagnóstico rápido
 
 ```powershell
 CopyPasteRemote.exe --check          # o: python run_client.py --check
@@ -116,7 +144,7 @@ CopyPasteRemote.exe --check          # o: python run_client.py --check
 Muestra: versión del servidor, coincidencia de clave de pool y el pool con el estado
 en línea de cada máquina.
 
-## 7. Preguntas frecuentes
+## 8. Preguntas frecuentes
 
 **¿Necesito VPN?** No. Solo salida HTTPS hacia el servidor.
 

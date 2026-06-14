@@ -8,7 +8,7 @@ online/offline transitions so every client's pool view stays fresh.
 from __future__ import annotations
 
 import asyncio
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from starlette.websockets import WebSocket
 
@@ -19,6 +19,7 @@ class PresenceHub:
     def __init__(self) -> None:
         # slot -> set of websockets (a machine may briefly have >1 during reconnect)
         self._conns: Dict[int, List[WebSocket]] = {}
+        self._pool_of: Dict[int, str] = {}  # slot -> pool, for pool-scoped broadcasts
         # Created lazily inside the running loop: on Python 3.8 an asyncio.Lock
         # built at import time can bind to the wrong event loop.
         self._lock_obj = None
@@ -29,11 +30,12 @@ class PresenceHub:
             self._lock_obj = asyncio.Lock()
         return self._lock_obj
 
-    async def connect(self, slot: int, ws: WebSocket) -> bool:
+    async def connect(self, slot: int, ws: WebSocket, pool: str = "default") -> bool:
         """Register a socket. Returns True if this machine just came online."""
         async with self._lock:
             was_offline = slot not in self._conns or not self._conns[slot]
             self._conns.setdefault(slot, []).append(ws)
+            self._pool_of[slot] = pool
         return was_offline
 
     async def disconnect(self, slot: int, ws: WebSocket) -> bool:
@@ -45,11 +47,14 @@ class PresenceHub:
             now_offline = not conns
             if now_offline and slot in self._conns:
                 del self._conns[slot]
+                self._pool_of.pop(slot, None)
         return now_offline
 
-    async def online_slots(self) -> List[int]:
+    async def online_slots(self, pool: Optional[str] = None) -> List[int]:
         async with self._lock:
-            return sorted(self._conns.keys())
+            if pool is None:
+                return sorted(self._conns.keys())
+            return sorted(s for s in self._conns if self._pool_of.get(s) == pool)
 
     async def is_online(self, slot: int) -> bool:
         async with self._lock:
@@ -65,13 +70,15 @@ class PresenceHub:
                 # Drop on failure; the socket's own loop will clean up.
                 pass
 
-    async def broadcast(self, message: str, exclude_slot: int = None) -> None:
+    async def broadcast(
+        self, message: str, exclude_slot: int = None, pool: Optional[str] = None
+    ) -> None:
         async with self._lock:
             targets = [
                 (slot, ws)
                 for slot, conns in self._conns.items()
                 for ws in conns
-                if slot != exclude_slot
+                if slot != exclude_slot and (pool is None or self._pool_of.get(slot) == pool)
             ]
         for _slot, ws in targets:
             try:
@@ -93,8 +100,9 @@ class PresenceHub:
             ),
         )
 
-    async def announce_presence(self, slot: int, online: bool) -> None:
+    async def announce_presence(self, slot: int, online: bool, pool: Optional[str] = None) -> None:
         await self.broadcast(
             protocol.ws_message(protocol.WS_PRESENCE, slot=slot, online=online),
             exclude_slot=slot,
+            pool=pool,
         )
