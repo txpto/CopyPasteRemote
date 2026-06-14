@@ -71,7 +71,7 @@ tests/        Pruebas unitarias e integración E2E
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements-server.txt requests websocket-client pytest
+pip install -r requirements-server.txt requests httpx websocket-client pytest
 pytest -q
 ```
 

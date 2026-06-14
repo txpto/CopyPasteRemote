@@ -34,7 +34,7 @@ client = [
     "keyboard>=0.13.5",
     "pycryptodome>=3.18",
 ]
-dev = ["pytest>=7", "requests>=2.27", "websocket-client>=1.5"]
+dev = ["pytest>=7", "requests>=2.27", "websocket-client>=1.5", "httpx>=0.24"]
 
 [project.scripts]
 cpr-server = "run_server:main"
