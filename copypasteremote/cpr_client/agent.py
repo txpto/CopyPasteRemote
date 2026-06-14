@@ -217,13 +217,17 @@ class Agent:
             env_dict = self.rest.pull_envelope(slot)
             env = Envelope.from_dict(env_dict)
             clip = self._materialise(env)
+        return self._apply(slot, env, clip, auto_paste)
 
+    def _apply(self, slot, env, clip, auto_paste, paste_default=None) -> ClipData:
+        """Verify, write to the local clipboard and optionally paste."""
         if env.key_fp and env.key_fp != crypto.key_fingerprint(self.key):
             self.events.on_error("Decryption key mismatch; cannot read this clip")
             raise AgentError("Pool key mismatch")
 
         self.clipboard.write(clip)
-        do_paste = self.config.auto_paste if auto_paste is None else auto_paste
+        default = self.config.auto_paste if paste_default is None else paste_default
+        do_paste = default if auto_paste is None else auto_paste
         if do_paste:
             time.sleep(0.05)
             try:
@@ -238,6 +242,18 @@ class Agent:
 
     def pull_own(self, auto_paste: Optional[bool] = None) -> ClipData:
         return self.pull(int(self.config.machine_id), auto_paste=auto_paste)
+
+    # -- history ------------------------------------------------------------
+    def history(self, slot: int, limit: int = 50) -> list:
+        return self.rest.get_history(slot, limit=limit).get("entries", [])
+
+    def pull_history(self, slot: int, history_id: int, auto_paste: Optional[bool] = None) -> ClipData:
+        env = Envelope.from_dict(self.rest.get_history_entry(slot, history_id))
+        clip = self._materialise(env)
+        return self._apply(slot, env, clip, auto_paste)
+
+    def pin_history(self, slot: int, history_id: int, pinned: bool = True) -> None:
+        self.rest.pin_history(slot, history_id, pinned)
 
     def _materialise(self, env: Envelope) -> ClipData:
         """Decrypt an envelope's payload and turn it into ClipData."""
@@ -289,13 +305,27 @@ class Agent:
             self._materialised.append((path, time.time()))
         return result.clip
 
-    # -- prefetch via WS ----------------------------------------------------
+    # -- prefetch / auto-apply via WS --------------------------------------
     def _on_clip_notification(self, slot: int, info: dict) -> None:
         self.events.on_clip_available(slot, info)
-        if self.config.prefetch and slot == int(self.config.machine_id):
+        if slot != int(self.config.machine_id):
+            return
+
+        # "Follow" mode: automatically put incoming content on the local clipboard.
+        if getattr(self.config, "auto_apply_incoming", False):
             try:
-                env_dict = self.rest.pull_envelope(slot)
-                env = Envelope.from_dict(env_dict)
+                env = Envelope.from_dict(self.rest.pull_envelope(slot))
+                clip = self._materialise(env)
+                self._apply(slot, env, clip, auto_paste=False, paste_default=False)
+                log.info("Auto-applied incoming %s to clipboard", env.human_summary())
+            except Exception as exc:  # noqa: BLE001
+                log.debug("Auto-apply failed: %s", exc)
+            return
+
+        # Otherwise just pre-fetch so the next manual paste is instant.
+        if self.config.prefetch:
+            try:
+                env = Envelope.from_dict(self.rest.pull_envelope(slot))
                 clip = self._materialise(env)
                 self._prefetched[slot] = (env, clip)
                 log.debug("Prefetched clip for slot %d", slot)

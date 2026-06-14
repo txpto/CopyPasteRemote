@@ -179,11 +179,41 @@ class CprTray:
             pystray.MenuItem("Send clipboard to", pystray.Menu(lambda: self._target_items("push"))),
             pystray.MenuItem("Paste from", pystray.Menu(lambda: self._target_items("pull"))),
             pystray.MenuItem("Paste my mailbox", lambda i, it: self._do_pull_own()),
+            pystray.MenuItem("History (my mailbox)", pystray.Menu(lambda: self._history_items())),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Refresh pool", lambda i, it: self.refresh_pool()),
             pystray.MenuItem("Open config folder", lambda i, it: self._open_config_dir()),
             pystray.MenuItem("Quit", lambda i, it: self.stop()),
         )
+
+    def _history_items(self):
+        import datetime
+
+        import pystray
+
+        items = []
+        try:
+            entries = self.agent.history(int(self.config.machine_id), limit=15)
+        except Exception:
+            entries = []
+        for e in entries:
+            when = datetime.datetime.fromtimestamp(e.get("created_at", 0)).strftime("%H:%M")
+            pin = "📌 " if e.get("pinned") else ""
+            label = "%s%s  %s (%s B) from %s" % (
+                pin, when, e.get("kind"), e.get("size"), e.get("from_name") or e.get("from_id"))
+            hid = e.get("id")
+            cb = (lambda h: (lambda icon, item: self._do_pull_history(h)))(hid)
+            items.append(pystray.MenuItem(label, cb))
+        if not items:
+            items.append(pystray.MenuItem("(no history)", None, enabled=False))
+        return items
+
+    def _do_pull_history(self, history_id: int) -> None:
+        threading.Thread(
+            target=self._safe,
+            args=(self.agent.pull_history, int(self.config.machine_id), history_id),
+            daemon=True,
+        ).start()
 
     # -- actions (run off the UI thread to avoid blocking the menu) ---------
     def _do_push(self, slot: int) -> None:

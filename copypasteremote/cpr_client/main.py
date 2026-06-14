@@ -37,14 +37,24 @@ def _setup_logging(cfg: ClientConfig) -> None:
 
 
 def _make_clipboard():
-    if os.name != "nt":
-        raise SystemExit(
-            "The CopyPasteRemote client clipboard backend requires Windows.\n"
-            "Use --check to verify connectivity from a non-Windows host."
-        )
-    from .clipboard_win import WindowsClipboard
+    """Select the clipboard backend for the current OS."""
+    if os.name == "nt":
+        from .clipboard_win import WindowsClipboard
 
-    return WindowsClipboard()
+        return WindowsClipboard()
+    import platform
+
+    if platform.system() in ("Linux", "Darwin"):
+        from .clipboard_posix import ClipboardUnavailable, PosixClipboard
+
+        try:
+            return PosixClipboard()
+        except ClipboardUnavailable as exc:
+            raise SystemExit(
+                "Clipboard backend unavailable: %s\n"
+                "On Linux install wl-clipboard (Wayland) or xclip/xsel (X11)." % exc
+            )
+    raise SystemExit("Unsupported platform for the CopyPasteRemote client.")
 
 
 def cmd_setup(args) -> int:
@@ -107,8 +117,23 @@ def run_app(args) -> int:
         cfg.validate()
     except ValueError as exc:
         print("Invalid config (%s): %s" % (cfg.config_path, exc))
-        print("Run 'cpr-client --setup' or edit the file, then try again.")
-        return 2
+        # Offer the graphical wizard if a display is available.
+        from .wizard import gui_available, run_wizard
+
+        if gui_available():
+            print("Opening the setup wizard...")
+            if run_wizard(cfg.config_path):
+                cfg = ClientConfig.load(args.config)
+            else:
+                return 2
+        else:
+            print("Run 'cpr-client --wizard' (GUI) or '--setup', or edit the file.")
+            return 2
+        try:
+            cfg.validate()
+        except ValueError as exc2:
+            print("Still invalid: %s" % exc2)
+            return 2
 
     from .agent import Agent
     from .hotkeys import HotkeyManager
@@ -199,12 +224,20 @@ def main(argv=None) -> int:
     parser.add_argument("--no-tray", action="store_true", help="Run headless (no system tray)")
     parser.add_argument("--check", action="store_true", help="Test connection and exit")
     parser.add_argument("--setup", action="store_true", help="Write a starter config and exit")
+    parser.add_argument("--wizard", action="store_true", help="Open the graphical setup wizard")
     parser.add_argument("--force", action="store_true", help="With --setup, overwrite existing config")
     parser.add_argument("--version", action="version", version="CopyPasteRemote %s" % __version__)
     args = parser.parse_args(argv)
 
     if args.setup:
         return cmd_setup(args)
+    if args.wizard:
+        from .wizard import gui_available, run_wizard
+
+        if not gui_available():
+            print("No GUI available (Tkinter not found). Use --setup instead.")
+            return 2
+        return 0 if run_wizard(args.config) else 1
     if args.check:
         return cmd_check(args)
     return run_app(args)

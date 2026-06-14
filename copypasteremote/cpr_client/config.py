@@ -61,6 +61,11 @@ class ClientConfig:
     push_hotkeys: Dict[str, str] = field(default_factory=_default_push_hotkeys)
     pull_hotkeys: Dict[str, str] = field(default_factory=_default_pull_hotkeys)
 
+    # Follow / auto-sync -----------------------------------------------------
+    # When true, content arriving in MY mailbox is applied to the local clipboard
+    # automatically (no hotkey, no paste) - a "follow my mailbox" mode.
+    auto_apply_incoming: bool = False
+
     # Misc -------------------------------------------------------------------
     temp_dir: str = ""                # where to materialise received files (blank = system temp)
     log_level: str = "info"

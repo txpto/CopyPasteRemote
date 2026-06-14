@@ -86,6 +86,20 @@ class RestClient:
     def clear(self, slot: int) -> None:
         self._request("DELETE", "/api/clip/%d" % slot)
 
+    # -- history ------------------------------------------------------------
+    def get_history(self, slot: int, limit: int = 50) -> Dict[str, Any]:
+        return self._request(
+            "GET", "/api/clip/%d/history" % slot, params={"limit": limit}
+        ).json()
+
+    def get_history_entry(self, slot: int, history_id: int) -> Dict[str, Any]:
+        return self._request("GET", "/api/clip/%d/history/%d" % (slot, history_id)).json()
+
+    def pin_history(self, slot: int, history_id: int, pinned: bool = True) -> Dict[str, Any]:
+        return self._request(
+            "POST", "/api/clip/%d/history/%d/pin" % (slot, history_id), json={"pinned": pinned}
+        ).json()
+
     # -- blobs --------------------------------------------------------------
     def upload_blob(
         self,
