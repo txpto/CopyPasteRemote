@@ -77,15 +77,16 @@ def cmd_check(args) -> int:
     rest = RestClient(cfg.server_url, int(cfg.machine_id), cfg.token, cfg.verify_tls, cfg.ca_cert)
     try:
         info = rest.info()
+        pool = rest.get_pool()  # authenticated; also carries pool_key_fp now
         print("Server OK: %s v%s (protocol %s, crypto %s)"
-              % (info.get("app"), info.get("version"), info.get("protocol"), info.get("crypto_backend")))
+              % (info.get("app"), info.get("version"), info.get("protocol"),
+                 pool.get("crypto_backend")))
         from cpr_shared import crypto
 
         local_fp = crypto.key_fingerprint(crypto.key_from_b64(cfg.pool_key))
-        srv_fp = info.get("pool_key_fp")
+        srv_fp = pool.get("pool_key_fp")
         match = "OK" if (srv_fp and srv_fp == local_fp) else "MISMATCH/unknown"
         print("Pool key fingerprint: local=%s server=%s [%s]" % (local_fp, srv_fp, match))
-        pool = rest.get_pool()
         print("You are slot %d. Pool:" % pool.get("you", -1))
         for m in pool.get("machines", []):
             print("  - slot %d  %-20s %s%s"

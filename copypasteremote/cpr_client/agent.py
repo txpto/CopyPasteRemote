@@ -140,13 +140,19 @@ class Agent:
 
     def check_server(self) -> dict:
         info = self.rest.info()
+        # pool_key_fp moved behind authentication (/api/pool) to limit public
+        # information disclosure on an Internet-exposed server.
         ours = crypto.key_fingerprint(self.key)
-        theirs = info.get("pool_key_fp")
-        if theirs and theirs != ours:
-            log.warning(
-                "Pool key fingerprint mismatch (server=%s, local=%s); peers will "
-                "not be able to decrypt your clips.", theirs, ours
-            )
+        try:
+            pool = self.rest.get_pool()
+            theirs = pool.get("pool_key_fp")
+            if theirs and theirs != ours:
+                log.warning(
+                    "Pool key fingerprint mismatch (server=%s, local=%s); peers will "
+                    "not be able to decrypt your clips.", theirs, ours
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.debug("Could not verify pool key fingerprint: %s", exc)
         return info
 
     # -- push ---------------------------------------------------------------
