@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "copypasteremote"
+version = "1.0.0"
+description = "Shared clipboard (text, files, folders) between computers across different networks."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [{ name = "CopyPasteRemote contributors" }]
+keywords = ["clipboard", "remote", "windows", "sync", "files"]
+
+# Base install has no hard runtime deps; pick an extra below.
+dependencies = []
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.110,<1.0",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.5,<3",
+    "cryptography>=42.0",
+    "python-multipart>=0.0.9",
+]
+# Client extra targets modern Python; for Windows 7 use requirements-client.txt
+# (which pins Win7-compatible versions).
+client = [
+    "pywin32; sys_platform == 'win32'",
+    "websocket-client>=1.5,<2",
+    "requests>=2.27,<3",
+    "pystray>=0.19,<0.20",
+    "Pillow>=9.0",
+    "keyboard>=0.13.5",
+    "pycryptodome>=3.18",
+]
+dev = ["pytest>=7", "requests>=2.27", "websocket-client>=1.5"]
+
+[project.scripts]
+cpr-server = "run_server:main"
+cpr-server-admin = "cpr_server.admin_cli:main"
+cpr-client = "cpr_client.main:main"
+
+[tool.setuptools]
+py-modules = ["run_server", "run_client"]
+
+[tool.setuptools.packages.find]
+include = ["cpr_shared*", "cpr_server*", "cpr_client*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

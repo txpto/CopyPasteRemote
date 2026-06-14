@@ -1,0 +1,26 @@
+# CopyPasteRemote client (Windows agent) dependencies.
+#
+# IMPORTANT: these versions are pinned so they keep working on Windows 7 x64 with
+# the last Python that supports it (3.8.10). Do not bump them blindly; newer
+# releases routinely drop Windows 7 / Python 3.8 support.
+
+# Win32 clipboard, global hotkeys, SendInput, tray helpers.
+pywin32==305
+
+# Real-time presence channel.
+websocket-client>=1.5,<2
+
+# REST + chunked blob upload/download. urllib3 pinned <2 for old-Windows TLS.
+requests>=2.27,<3
+urllib3>=1.26,<2
+
+# System tray icon + menu.
+pystray>=0.19,<0.20
+Pillow>=9.0,<10
+
+# Global hotkeys (supports key combos/chords). Pure Python.
+keyboard>=0.13.5
+
+# Crypto backend. pycryptodome installs cleanly on Windows 7 x64 / Python 3.8
+# and is wire-compatible with the server's 'cryptography' backend.
+pycryptodome>=3.18
