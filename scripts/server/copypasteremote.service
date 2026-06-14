@@ -1,0 +1,24 @@
+[Unit]
+Description=CopyPasteRemote orchestrator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust paths to your install location.
+User=cpr
+Group=cpr
+WorkingDirectory=/opt/copypasteremote
+Environment=CPR_SERVER_CONFIG=/opt/copypasteremote/server-config.json
+# Use the project's virtualenv interpreter.
+ExecStart=/opt/copypasteremote/.venv/bin/python /opt/copypasteremote/run_server.py
+Restart=on-failure
+RestartSec=3
+# Hardening (relax if it conflicts with your data_dir location).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/copypasteremote/data
+
+[Install]
+WantedBy=multi-user.target

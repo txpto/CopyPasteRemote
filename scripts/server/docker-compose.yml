@@ -1,0 +1,27 @@
+# Minimal compose for the CopyPasteRemote orchestrator.
+# Run from the repository root:
+#   docker compose -f scripts/server/docker-compose.yml up -d
+#
+# For TLS, put a reverse proxy (Caddy/Traefik/Nginx) in front, or set
+# CPR_TLS_CERTFILE / CPR_TLS_KEYFILE and mount the certs.
+services:
+  cpr-server:
+    build:
+      context: ../..
+      dockerfile: scripts/server/Dockerfile
+    image: copypasteremote:latest
+    container_name: cpr-server
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      CPR_PUBLIC_URL: "https://CHANGE-ME.public.ip:8765"
+      CPR_POOL_ID: "default"
+      # Set these out-of-band; do NOT commit real secrets.
+      # CPR_POOL_KEY: "base64-32-byte-key"
+      # CPR_ADMIN_API_KEY: "your-admin-key"
+    volumes:
+      - cpr-data:/data
+
+volumes:
+  cpr-data:
