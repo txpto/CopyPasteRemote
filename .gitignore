@@ -3,3 +3,7 @@ __pycache__/
 .venv/
 .env
 data/
+
+# Local deployment kit (RUNBOOK + setup scripts). Contains site-specific data
+# (public IP, internal topology) — keep it local, never publish to this repo.
+/deploy/
