@@ -8,14 +8,13 @@ REM   (el 2o argumento, el cert del servidor, es opcional y activa la verificaci
 
 setlocal
 if "%~1"=="" (
-  echo ERROR: pasa la ruta del JSON de configuracion del cliente.
-  echo   setup-client-win7.bat "<ruta>\client-config.json" ["<ruta>\cert.pem"]
+  echo ERROR: pasa la ruta del JSON de configuracion del cliente como primer argumento.
   exit /b 1
 )
 set "CFGSRC=%~1"
 set "CASRC=%~2"
 
-set "ROOT=C:\CopyPasteRemote-client"
+set "ROOT=C:\CopyPasteRemote"
 set "SRC=%ROOT%\src"
 set "PKG=%SRC%\copypasteremote"
 set "VENV=%ROOT%\venv"
@@ -34,15 +33,20 @@ if errorlevel 1 (
 )
 
 echo == Obteniendo el codigo ==
-if not exist "%PKG%" (
-  git --version >nul 2>&1
-  if errorlevel 1 (
-    echo No hay git. Descarga el ZIP del repo desde %REPO% , descomprimelo en
-    echo   %SRC%  (de modo que exista %PKG%\run_client.py ) y vuelve a ejecutar.
-    exit /b 1
-  )
+if not exist "%PKG%\run_client.py" (
+  where git >nul 2>&1
+  if errorlevel 1 goto NOGIT
   git clone %REPO% "%SRC%"
 )
+goto CODEOK
+:NOGIT
+echo No hay git. Descarga el ZIP del repo desde:
+echo   %REPO%
+echo y descomprimelo en %SRC%
+echo de modo que exista %PKG%\run_client.py
+echo Luego vuelve a ejecutar este script.
+exit /b 1
+:CODEOK
 
 echo == Creando venv e instalando dependencias (fijadas para Win7) ==
 if not exist "%VENVPY%" py -3.8 -m venv "%VENV%"
@@ -56,7 +60,7 @@ copy /Y "%CFGSRC%" "%CFGDIR%\config.json"
 if not "%CASRC%"=="" (
   echo == Activando TLS con el certificado del servidor ==
   copy /Y "%CASRC%" "%CFGDIR%\cpr-cert.pem"
-  "%VENVPY%" -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['ca_cert']=sys.argv[2]; d['verify_tls']=True; json.dump(d,open(p,'w'),indent=2)" "%CFGDIR%\config.json" "%CFGDIR%\cpr-cert.pem"
+  "%VENVPY%" -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['ca_cert']=sys.argv[2]; d['verify_tls']=True; d['server_url']=d['server_url'].replace('http://','https://'); json.dump(d,open(p,'w'),indent=2)" "%CFGDIR%\config.json" "%CFGDIR%\cpr-cert.pem"
 )
 
 echo == Probando la conexion con el servidor ==
@@ -65,6 +69,6 @@ pushd "%PKG%"
 popd
 
 echo.
-echo Si el check fue OK, arranca el cliente de bandeja (COMO ADMINISTRADOR para hotkeys globales):
+echo Si el check fue OK, arranca el cliente (COMO ADMINISTRADOR para hotkeys globales):
 echo   "%VENVPY%" "%PKG%\run_client.py"
 endlocal

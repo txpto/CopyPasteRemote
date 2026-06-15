@@ -7,8 +7,8 @@ REM Uso:    autostart-client-win7.bat   (ejecutar desde un CMD elevado)
 REM Quitar: schtasks /Delete /TN "CopyPasteRemote Client" /F
 
 setlocal
-set "PYW=C:\CopyPasteRemote-client\venv\Scripts\pythonw.exe"
-set "SCRIPT=C:\CopyPasteRemote-client\src\copypasteremote\run_client.py"
+set "PYW=C:\CopyPasteRemote\venv\Scripts\pythonw.exe"
+set "SCRIPT=C:\CopyPasteRemote\src\copypasteremote\run_client.py"
 set "NAME=CopyPasteRemote Client"
 
 if not exist "%PYW%" (
