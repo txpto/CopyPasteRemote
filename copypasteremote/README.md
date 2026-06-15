@@ -32,6 +32,7 @@ Máquina 1  ──Ctrl+Shift+F2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2─
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura, diagramas y topología (DD-WRT/ESXi). |
 | [docs/INSTALL.md](docs/INSTALL.md) | **Manual de instalación** (servidor y cliente). |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **Manual de uso**. |
+| [docs/HOTKEYS.md](docs/HOTKEYS.md) | **Chuleta de atajos** (enviar / recibir / pegar). |
 | [docs/SECURITY.md](docs/SECURITY.md) | **Análisis de seguridad** y checklist de endurecimiento. |
 
 ## Inicio rápido

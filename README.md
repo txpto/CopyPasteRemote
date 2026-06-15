@@ -32,6 +32,7 @@ Máquina 1  ──Ctrl+Shift+F2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2─
 | [copypasteremote/docs/ARCHITECTURE.md](copypasteremote/docs/ARCHITECTURE.md) | Arquitectura, diagramas y topología (DD-WRT/ESXi). |
 | [copypasteremote/docs/INSTALL.md](copypasteremote/docs/INSTALL.md) | **Manual de instalación** (servidor y cliente). |
 | [copypasteremote/docs/USER_GUIDE.md](copypasteremote/docs/USER_GUIDE.md) | **Manual de uso**. |
+| [copypasteremote/docs/HOTKEYS.md](copypasteremote/docs/HOTKEYS.md) | **Chuleta de atajos** (enviar / recibir / pegar). |
 | [copypasteremote/docs/SECURITY.md](copypasteremote/docs/SECURITY.md) | **Análisis de seguridad** y checklist de endurecimiento. |
 | [copypasteremote/docs/deployment/DEPLOYMENT.md](copypasteremote/docs/deployment/DEPLOYMENT.md) | **Guía de despliegue autohospedado** (servidor + clientes, NAT, TLS, servicio y autostart). |
 
