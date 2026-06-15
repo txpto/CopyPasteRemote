@@ -97,6 +97,19 @@ client\setup-client-win7.bat "<path>\client-config.json" "<path>\cert.pem"   REM
 Then run the tray client (as Administrator, so global hotkeys work):
 `python run_client.py`.
 
+**Start at logon (autostart):**
+```powershell
+# Windows 10/11 — elevated logon task (recommended for global hotkeys):
+.\client\autostart-client.ps1 -PkgDir "<path>\copypasteremote" -Elevated
+#   ...or a plain Startup-folder shortcut (no elevation): omit -Elevated.
+```
+```bat
+REM Windows 7 (run from an elevated CMD):
+client\autostart-client-win7.bat
+```
+Both register a `CopyPasteRemote Client` logon task running `pythonw.exe` (no console).
+Remove it with `schtasks /Delete /TN "CopyPasteRemote Client" /F`.
+
 ### 4. Verify
 
 - On the server box, open `http://127.0.0.1:8766/dashboard` (with the admin key) — your
