@@ -16,9 +16,9 @@ el copiar/pegar nativo de Windows, y está pensado inicialmente para clientes
 Cada máquina tiene un **buzón** (mailbox) numerado. El usuario:
 
 - **Envía** el contenido de su portapapeles al buzón de otra máquina con un atajo
-  de teclado (por defecto `Ctrl+Alt+N`, donde `N` es el número de la máquina destino).
+  de teclado (por defecto `Ctrl+Shift+F<N>`, donde `N` es el número de la máquina destino).
 - **Pega** el contenido recibido en una máquina con otro atajo
-  (por defecto `Ctrl+Shift+N` para el buzón `N`, o `Ctrl+Alt+V` para *mi* buzón).
+  (por defecto `Ctrl+Shift+N` para el buzón `N`, o `Ctrl+Shift+0` para *mi* buzón).
 
 > Los atajos son **configurables**; los valores anteriores son los predeterminados,
 > elegidos para no pisar el `Ctrl+C`/`Ctrl+V` nativos.
@@ -58,9 +58,9 @@ Cada máquina tiene un **buzón** (mailbox) numerado. El usuario:
 ### 3.1 Casos de uso principales
 
 - **UC1 — Enviar portapapeles a otra máquina.** El usuario copia algo (`Ctrl+C`)
-  y pulsa `Ctrl+Alt+2`; el contenido viaja cifrado al buzón de la máquina 2.
+  y pulsa `Ctrl+Shift+F2`; el contenido viaja cifrado al buzón de la máquina 2.
 - **UC2 — Pegar contenido recibido.** En la máquina 2, el usuario pulsa
-  `Ctrl+Shift+2` (o `Ctrl+Alt+V`); el contenido se descifra, se coloca en el
+  `Ctrl+Shift+2` (o `Ctrl+Shift+0`); el contenido se descifra, se coloca en el
   portapapeles local y se pega en la aplicación activa.
 - **UC3 — Copiar archivos/carpetas.** Igual que UC1/UC2 pero con archivos
   seleccionados en el Explorador; en destino aparecen como archivos reales listos
@@ -80,7 +80,7 @@ Cada máquina tiene un **buzón** (mailbox) numerado. El usuario:
   (los miembros del pool comparten la clave y se consideran de confianza mutua).
 
 ```
-   Máquina 1  ──Ctrl+Alt+2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2──  Máquina 2
+   Máquina 1  ──Ctrl+Shift+F2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2──  Máquina 2
    (origen)      (push)        (servidor)         (pull+paste)   (destino)
 ```
 

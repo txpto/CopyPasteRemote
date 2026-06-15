@@ -5,7 +5,7 @@ máquina y pega en otra —texto, archivos y carpetas— estén donde estén, co
 salida a Internet hacia un servidor central que actúa de *director de orquesta*.
 
 ```
-Máquina 1  ──Ctrl+Alt+2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2──  Máquina 2
+Máquina 1  ──Ctrl+Shift+F2──►  [ Buzón 2 ]  ◄──Ctrl+Shift+2──  Máquina 2
  (copiar)      enviar         servidor          pegar         (pegar)
 ```
 
@@ -61,8 +61,8 @@ python run_client.py --check     # verifica conexión
 python run_client.py             # app de bandeja con atajos globales
 ```
 
-Atajos por defecto: **`Ctrl+Alt+N`** envía al buzón N · **`Ctrl+Shift+N`** pega del
-buzón N · **`Ctrl+Alt+V`** pega de tu buzón.
+Atajos por defecto: **`Ctrl+Shift+F<N>`** envía al buzón N · **`Ctrl+Shift+N`** pega del
+buzón N · **`Ctrl+Shift+0`** pega de tu buzón.
 
 ### Dashboard
 

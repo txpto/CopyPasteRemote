@@ -115,7 +115,7 @@ consola). Quítala con `schtasks /Delete /TN "CopyPasteRemote Client" /F`.
 
 - En la máquina del servidor, abre `http://127.0.0.1:8766/dashboard` (con la admin key) —
   tus clientes deberían aparecer **online**.
-- Copia en un cliente, envía con `Ctrl+Alt+<slot>`, recoge en el destino con
+- Copia en un cliente, envía con `Ctrl+Shift+F<slot>`, recoge en el destino con
   `Ctrl+Shift+<slot>`.
 
 Consulta los scripts en `server/` y `client/` para los comandos exactos.

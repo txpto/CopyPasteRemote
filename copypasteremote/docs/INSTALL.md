@@ -235,10 +235,10 @@ REM Resultado: dist\CopyPasteRemote.exe
   "verify_tls": true,
   "ca_cert": "",
   "auto_paste": true,
-  "copy_before_send": true,
+  "copy_before_send": false,
   "notifications": true,
-  "pull_own_hotkey": "ctrl+alt+v",
-  "push_hotkeys": { "1": "ctrl+alt+1", "2": "ctrl+alt+2", "3": "ctrl+alt+3" },
+  "pull_own_hotkey": "ctrl+shift+0",
+  "push_hotkeys": { "1": "ctrl+shift+f1", "2": "ctrl+shift+f2", "3": "ctrl+shift+f3" },
   "pull_hotkeys": { "1": "ctrl+shift+1", "2": "ctrl+shift+2", "3": "ctrl+shift+3" }
 }
 ```
@@ -285,8 +285,8 @@ opciones, ambas auto-arrancables:
 1. En **dos** máquinas del pool, ejecuta `--check`: ambas deben ver el pool y la
    huella de clave debe marcar `[OK]`.
 2. Arranca el cliente en ambas. El icono de bandeja debe ponerse en verde (conectado).
-3. En la máquina 1: copia un texto (`Ctrl+C`) y pulsa `Ctrl+Alt+2`.
-4. En la máquina 2: pulsa `Ctrl+Shift+2` (o `Ctrl+Alt+V`). Debe pegarse el texto.
+3. En la máquina 1: copia un texto (`Ctrl+C`) y pulsa `Ctrl+Shift+F2`.
+4. En la máquina 2: pulsa `Ctrl+Shift+2` (o `Ctrl+Shift+0`). Debe pegarse el texto.
 5. Repite con **archivos/carpetas** seleccionados en el Explorador.
 6. Prueba un **archivo grande** (cientos de MB) para validar la transferencia por
    *chunks*.

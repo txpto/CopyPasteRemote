@@ -57,7 +57,7 @@
 
 ```
 Usuario(Win A)        Agente A            Servidor            (Win B)
-     │  Ctrl+Alt+2        │                   │                  │
+     │  Ctrl+Shift+F2        │                   │                  │
      ├───────────────────►│                   │                  │
      │             (Ctrl+C auto)              │                  │
      │             lee portapapeles           │                  │
