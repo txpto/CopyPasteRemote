@@ -39,6 +39,11 @@ class ServerConfig:
     # Network ----------------------------------------------------------------
     host: str = "0.0.0.0"
     port: int = 8765
+    # Admin/dashboard listener. Bound to loopback only by default so the dashboard
+    # and the /api/admin/* endpoints are NOT reachable over the public port — browse
+    # them on the server box itself at http://127.0.0.1:8766/dashboard
+    admin_host: str = "127.0.0.1"
+    admin_port: int = 8766
     # Public URL clients should use to reach this server (used when the admin CLI
     # generates ready-to-use client configs). Example: https://cpr.example.com:8765
     public_url: str = "https://CHANGE-ME.public.ip:8765"
@@ -111,6 +116,8 @@ class ServerConfig:
         # Environment overrides (highest priority).
         cfg.host = os.environ.get("CPR_HOST", cfg.host)
         cfg.port = _env_int("CPR_PORT", cfg.port)
+        cfg.admin_host = os.environ.get("CPR_ADMIN_HOST", cfg.admin_host)
+        cfg.admin_port = _env_int("CPR_ADMIN_PORT", cfg.admin_port)
         cfg.public_url = os.environ.get("CPR_PUBLIC_URL", cfg.public_url)
         cfg.data_dir = os.environ.get("CPR_DATA_DIR", cfg.data_dir)
         cfg.max_payload_bytes = _env_int("CPR_MAX_PAYLOAD_BYTES", cfg.max_payload_bytes)
