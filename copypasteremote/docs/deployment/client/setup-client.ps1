@@ -23,7 +23,7 @@ if (-not (Test-Path $ConfigSource)) { throw "No se encuentra el config: $ConfigS
 
 if (-not (Test-Path $VenvPy)) { python -m venv $Venv }
 & $VenvPy -m pip install --upgrade pip
-& $VenvPy -m pip install -r "$PkgDir\requirements-client.txt"
+& $VenvPy -m pip install -r "$PkgDir\requirements-client-modern.txt"
 
 New-Item -ItemType Directory -Force -Path $CfgDir | Out-Null
 Copy-Item $ConfigSource $CfgPath -Force

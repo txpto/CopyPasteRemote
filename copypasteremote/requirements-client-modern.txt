@@ -1,0 +1,15 @@
+# CopyPasteRemote client dependencies for MODERN Windows (10/11) + current Python (3.10+).
+#
+# requirements-client.txt pins old versions so the client keeps working on Windows 7 x64
+# with Python 3.8.10; those pins have no wheels for Python 3.12+. Use THIS file on modern
+# Windows. The wire protocol and crypto are identical, so a Win7 client and a Win10 client
+# interoperate fine.
+
+pywin32>=306              # Win32 clipboard, hotkeys, SendInput, tray helpers
+websocket-client>=1.5     # real-time presence channel
+requests>=2.27            # REST + chunked blob upload/download
+urllib3>=1.26
+pystray>=0.19             # system tray icon + menu
+Pillow>=9.0               # tray icon image
+keyboard>=0.13.5          # global hotkeys (pure Python)
+pycryptodome>=3.18        # crypto backend (wire-compatible with the server's 'cryptography')
