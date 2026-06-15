@@ -27,7 +27,7 @@ $cfg = Get-Content $Conf -Raw | ConvertFrom-Json
 $cfg.tls_certfile = "$Certs\cert.pem"
 $cfg.tls_keyfile  = "$Certs\key.pem"
 $cfg.public_url   = "https://$PublicHost`:$Port"
-$cfg | ConvertTo-Json -Depth 12 | Set-Content $Conf -Encoding utf8
+[System.IO.File]::WriteAllText($Conf, ($cfg | ConvertTo-Json -Depth 12), (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "TLS ON, public_url = https://$PublicHost`:$Port" -ForegroundColor Green
 
 if (Get-Service $SvcName -ErrorAction SilentlyContinue) {

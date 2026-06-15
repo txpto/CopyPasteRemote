@@ -20,7 +20,7 @@ if (-not $cfg.pool_key_b64) {
 } else {
     $cfg.pool_key_b64 | Set-Content "$Root\POOL_KEY_BACKUP.txt" -Encoding ascii
     $cfg.pool_key_b64 = ""
-    $cfg | ConvertTo-Json -Depth 12 | Set-Content $Conf -Encoding utf8
+    [System.IO.File]::WriteAllText($Conf, ($cfg | ConvertTo-Json -Depth 12), (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "pool_key_b64 eliminada del config." -ForegroundColor Green
     Write-Host "Respaldo en $Root\POOL_KEY_BACKUP.txt -> guárdalo OFFLINE y luego bórralo de la VM." -ForegroundColor Yellow
 }

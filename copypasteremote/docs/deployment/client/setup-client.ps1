@@ -36,7 +36,7 @@ if ($CaCert) {
     $cfg = Get-Content $CfgPath -Raw | ConvertFrom-Json
     $cfg.ca_cert = $CertDst
     $cfg.verify_tls = $true
-    $cfg | ConvertTo-Json -Depth 12 | Set-Content $CfgPath -Encoding utf8
+    [System.IO.File]::WriteAllText($CfgPath, ($cfg | ConvertTo-Json -Depth 12), (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "TLS: ca_cert -> $CertDst , verify_tls = true" -ForegroundColor Green
 }
 
