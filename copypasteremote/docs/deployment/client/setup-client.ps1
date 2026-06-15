@@ -34,8 +34,8 @@ if ($CaCert) {
     $CertDst = "$CfgDir\cpr-cert.pem"
     Copy-Item $CaCert $CertDst -Force
     $cfg = Get-Content $CfgPath -Raw | ConvertFrom-Json
-    $cfg.ca_cert = $CertDst
-    $cfg.verify_tls = $true
+    $cfg | Add-Member -NotePropertyName ca_cert -NotePropertyValue $CertDst -Force
+    $cfg | Add-Member -NotePropertyName verify_tls -NotePropertyValue $true -Force
     [System.IO.File]::WriteAllText($CfgPath, ($cfg | ConvertTo-Json -Depth 12), (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "TLS: ca_cert -> $CertDst , verify_tls = true" -ForegroundColor Green
 }
