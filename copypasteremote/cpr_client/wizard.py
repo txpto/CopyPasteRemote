@@ -68,7 +68,7 @@ def run_wizard(config_path: Optional[str] = None) -> bool:
     bool_opts = [
         ("verify_tls", "Verificar TLS", True),
         ("auto_paste", "Pegar automáticamente", True),
-        ("copy_before_send", "Copiar (Ctrl+C) antes de enviar", True),
+        ("copy_before_send", "Copiar (Ctrl+C) antes de enviar", False),
         ("auto_apply_incoming", "Aplicar automáticamente lo entrante (seguir)", False),
     ]
     bvars = {}

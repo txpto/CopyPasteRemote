@@ -51,7 +51,10 @@ class ClientConfig:
 
     # Behaviour --------------------------------------------------------------
     auto_paste: bool = True           # simulate Ctrl+V after pulling
-    copy_before_send: bool = True     # simulate Ctrl+C before pushing (grab selection)
+    copy_before_send: bool = False    # OFF by default: while a push hotkey (Ctrl+Alt+N)
+    #                                   is held, the synthetic Ctrl+C can land as
+    #                                   Ctrl+Alt+C and CUT the selection. Copy manually
+    #                                   before pushing, or turn this on if you need it.
     notifications: bool = True        # tray balloon notifications
     prefetch: bool = True             # pre-download content when notified over WS
     reconnect_seconds: int = 5        # WS reconnect backoff base
