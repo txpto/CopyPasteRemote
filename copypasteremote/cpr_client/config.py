@@ -28,8 +28,11 @@ def default_config_path() -> str:
 
 
 def _default_push_hotkeys() -> Dict[str, str]:
-    # "Send my clipboard to mailbox N"
-    return {str(n): "ctrl+alt+%d" % n for n in range(1, 10)}
+    # "Send my clipboard to mailbox N". Avoid Ctrl+Alt: on many layouts (e.g. Spanish)
+    # Ctrl+Alt == AltGr, so Ctrl+Alt+1 types "|", Ctrl+Alt+2 "@", etc. — that character
+    # leaks into the focused app and overwrites any selection. Function keys never emit
+    # a character, so they are safe.
+    return {str(n): "ctrl+shift+f%d" % n for n in range(1, 10)}
 
 
 def _default_pull_hotkeys() -> Dict[str, str]:
@@ -60,7 +63,7 @@ class ClientConfig:
     reconnect_seconds: int = 5        # WS reconnect backoff base
 
     # Hotkeys ----------------------------------------------------------------
-    pull_own_hotkey: str = "ctrl+alt+v"
+    pull_own_hotkey: str = "ctrl+shift+0"   # avoid Ctrl+Alt (= AltGr on some layouts)
     push_hotkeys: Dict[str, str] = field(default_factory=_default_push_hotkeys)
     pull_hotkeys: Dict[str, str] = field(default_factory=_default_pull_hotkeys)
 
