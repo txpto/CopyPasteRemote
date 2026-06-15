@@ -194,6 +194,17 @@ def _enum_formats(wc) -> List[int]:
 def _set_bytes(wc, fmt: int, data: bytes) -> None:
     """Place raw bytes onto the clipboard under ``fmt`` via a moveable HGLOBAL."""
     kernel32 = ctypes.windll.kernel32
+    # 64-bit safety: without explicit signatures ctypes treats handles/pointers as
+    # 32-bit ints and truncates them on 64-bit Python, so GlobalLock receives a bad
+    # handle and fails ("GlobalLock failed"). This broke CF_HDROP file paste (and
+    # silently HTML/image writes too).
+    kernel32.GlobalAlloc.restype = ctypes.c_void_p
+    kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalFree.restype = ctypes.c_void_p
+    kernel32.GlobalFree.argtypes = [ctypes.c_void_p]
     GMEM_MOVEABLE = 0x0002
     size = len(data)
     handle = kernel32.GlobalAlloc(GMEM_MOVEABLE, size)
@@ -224,6 +235,15 @@ def _send_ctrl_key(letter: str) -> None:
     try:
         import keyboard
 
+        # The push/pull hotkeys (e.g. Ctrl+Alt+N, Ctrl+Shift+N) leave their modifiers
+        # physically held when this runs. Release them first so the app receives a
+        # clean Ctrl+<letter> instead of Ctrl+Alt+C (which can cut) or Ctrl+Shift+V.
+        for _mod in ("alt", "shift", "ctrl", "left windows", "right windows"):
+            try:
+                keyboard.release(_mod)
+            except Exception:
+                pass
+        time.sleep(0.04)
         keyboard.send("ctrl+%s" % letter)
         return
     except Exception:
