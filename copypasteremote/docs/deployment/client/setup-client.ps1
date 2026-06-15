@@ -36,6 +36,7 @@ if ($CaCert) {
     $cfg = Get-Content $CfgPath -Raw | ConvertFrom-Json
     $cfg | Add-Member -NotePropertyName ca_cert -NotePropertyValue $CertDst -Force
     $cfg | Add-Member -NotePropertyName verify_tls -NotePropertyValue $true -Force
+    $cfg.server_url = $cfg.server_url -replace '^http://','https://'  # el server con TLS sirve https
     [System.IO.File]::WriteAllText($CfgPath, ($cfg | ConvertTo-Json -Depth 12), (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "TLS: ca_cert -> $CertDst , verify_tls = true" -ForegroundColor Green
 }
