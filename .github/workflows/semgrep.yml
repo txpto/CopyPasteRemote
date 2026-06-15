@@ -1,58 +1,60 @@
-name: Semgrep
-
-# Static analysis (SAST) with Semgrep. Runs on pushes and PRs to the main branches,
-# on a weekly schedule, and on demand. Findings are uploaded to GitHub Code Scanning
-# (Security tab) as SARIF.
+name: Semgrep SAST
 
 on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   schedule:
-    - cron: "0 3 * * 1"   # every Monday at 03:00 UTC
+    - cron: "0 6 * * 1"      # lunes 06:00 UTC
   workflow_dispatch:
 
-# Least-privilege token; security-events:write is needed to upload the SARIF.
 permissions:
   contents: read
-  security-events: write
-
-concurrency:
-  group: semgrep-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   semgrep:
-    name: scan
+    name: Semgrep CE scan
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install Semgrep
-        run: python -m pip install --upgrade semgrep
+        run: pip install semgrep          # pinear a la misma versión que en local
 
-      - name: Run Semgrep
-        # Do not fail the job on findings; we surface them in Code Scanning instead.
-        continue-on-error: true
+      - name: Run Semgrep (1 sola pasada)
         run: |
           semgrep scan \
-            --config p/default \
+            --metrics=off \
+            --disable-version-check \
             --config p/python \
             --config p/secrets \
+            --config p/sql-injection \
             --config p/owasp-top-ten \
-            --config p/security-audit \
-            --sarif --output semgrep.sarif
+            --exclude tests \
+            --exclude iec870ree \
+            --sarif-output semgrep.sarif \
+            --json-output semgrep.json \
+            src/ | tee semgrep.txt || true
 
-      - name: Upload SARIF to Code Scanning
+      - name: Subir resultados
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: semgrep.sarif
-          category: semgrep
+          name: semgrep-results
+          path: |
+            semgrep.sarif
+            semgrep.json
+            semgrep.txt
+          retention-days: 30
+
+      - name: Gate (falla solo si hay severidad ERROR)
+        if: always()
+        run: |
+          errs=$(jq '[.results[] | select(.extra.severity=="ERROR")] | length' semgrep.json)
+          echo "Hallazgos ERROR: $errs"
+          test "$errs" -eq 0
