@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Generate a self-signed TLS certificate (cert.pem + key.pem) for CopyPasteRemote.
+"""Genera un certificado TLS autofirmado (cert.pem + key.pem) para CopyPasteRemote.
 
-Usage:
-    python gen_selfsigned_cert.py <out_dir> <host1> [host2 ...]
+Uso:
+    python gen_selfsigned_cert.py <dir_salida> <host1> [host2 ...]
 
-Each host may be an IP (added as an IP SAN) or a DNS name. Example:
-    python gen_selfsigned_cert.py C:\\CopyPasteRemote\\certs <PUBLIC_IP_OR_DOMAIN> 127.0.0.1 localhost
+Cada host puede ser una IP (se añade como SAN tipo IP) o un nombre DNS. Ejemplo:
+    python gen_selfsigned_cert.py C:\\CopyPasteRemote\\certs <HOST_PUBLICO> 127.0.0.1 localhost
 """
 import datetime
 import ipaddress
@@ -68,11 +68,11 @@ def main():
     except OSError:
         pass
 
-    print("Certificate written:")
+    print("Certificado escrito:")
     print("  cert: %s" % cert_path)
     print("  key : %s" % key_path)
     print("  SAN : %s" % ", ".join(hosts))
-    print("\nCopy cert.pem to the clients (ca_cert) for TLS verification.")
+    print("\nCopia cert.pem a los clientes (ca_cert) para la verificación TLS.")
     return 0
 
 

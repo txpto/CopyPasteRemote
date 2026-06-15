@@ -1,11 +1,11 @@
-# 03-enable-tls.ps1  —  run as Administrator on the server (Windows).
-# Generates a self-signed cert (SAN = public host + loopback), enables TLS in the
-# server config (public_url -> https) and restarts the service.
+# 03-enable-tls.ps1  —  ejecutar como Administrador en el servidor (Windows).
+# Genera un certificado autofirmado (SAN = host público + loopback), activa TLS en la
+# configuración del servidor (public_url -> https) y reinicia el servicio.
 #
-# Usage:
-#   .\03-enable-tls.ps1 -PublicHost "<PUBLIC_IP_OR_DOMAIN>"
+# Uso:
+#   .\03-enable-tls.ps1 -PublicHost "<HOST_PUBLICO>"
 #
-# For a real domain, prefer a Let's Encrypt certificate instead of self-signed.
+# Para un dominio real, mejor un certificado de Let's Encrypt en lugar de autofirmado.
 
 param(
     [Parameter(Mandatory=$true)] [string] $PublicHost,
@@ -19,7 +19,7 @@ $Conf    = "$Root\server-config.json"
 $Certs   = "$Root\certs"
 $SvcName = "CopyPasteRemoteServer"
 
-if (-not (Test-Path $Conf)) { throw "$Conf not found. Run 01-setup-server.ps1 first." }
+if (-not (Test-Path $Conf)) { throw "No se encuentra $Conf . Ejecuta antes 01-setup-server.ps1." }
 
 & $VenvPy "$PSScriptRoot\gen_selfsigned_cert.py" $Certs $PublicHost "127.0.0.1" "localhost"
 
@@ -34,5 +34,5 @@ if (Get-Service $SvcName -ErrorAction SilentlyContinue) {
     Restart-Service $SvcName -Force; Start-Sleep -Seconds 2; Get-Service $SvcName
 }
 
-Write-Host "`nClients: copy $Certs\cert.pem to each client and pass it to the setup script" -ForegroundColor Cyan
-Write-Host "(it sets ca_cert + verify_tls=true). New client configs will use the https URL."
+Write-Host "`nClientes: copia $Certs\cert.pem a cada cliente y pásalo al script de setup" -ForegroundColor Cyan
+Write-Host "(fija ca_cert + verify_tls=true). Los nuevos configs de cliente usarán la URL https."

@@ -1,6 +1,6 @@
-# 02-install-service.ps1  —  run as Administrator on the server (Windows).
-# Installs run_server.py as a Windows service via NSSM (https://nssm.cc/).
-# Put nssm.exe in PATH or next to this script.
+# 02-install-service.ps1  —  ejecutar como Administrador en el servidor (Windows).
+# Instala run_server.py como servicio de Windows mediante NSSM (https://nssm.cc/).
+# Deja nssm.exe en el PATH o junto a este script.
 
 $ErrorActionPreference = "Stop"
 
@@ -15,7 +15,7 @@ New-Item -ItemType Directory -Force -Path $Logs | Out-Null
 
 $Nssm = (Get-Command nssm.exe -ErrorAction SilentlyContinue).Source
 if (-not $Nssm) { $Nssm = Join-Path $PSScriptRoot "nssm.exe" }
-if (-not (Test-Path $Nssm)) { throw "nssm.exe not found. Download it from https://nssm.cc/." }
+if (-not (Test-Path $Nssm)) { throw "No se encuentra nssm.exe. Descárgalo de https://nssm.cc/." }
 
 if (Get-Service $SvcName -ErrorAction SilentlyContinue) {
     & $Nssm stop $SvcName
@@ -23,7 +23,7 @@ if (Get-Service $SvcName -ErrorAction SilentlyContinue) {
 }
 
 & $Nssm install $SvcName $VenvPy "run_server.py --config `"$Conf`""
-& $Nssm set $SvcName AppDirectory $Pkg            # so cpr_server/cpr_shared are importable
+& $Nssm set $SvcName AppDirectory $Pkg            # para que cpr_server/cpr_shared sean importables
 & $Nssm set $SvcName DisplayName "CopyPasteRemote Server"
 & $Nssm set $SvcName Start SERVICE_AUTO_START
 & $Nssm set $SvcName AppStdout "$Logs\server.log"
@@ -35,4 +35,4 @@ if (Get-Service $SvcName -ErrorAction SilentlyContinue) {
 & $Nssm start $SvcName
 Start-Sleep -Seconds 2
 Get-Service $SvcName
-Write-Host "Check: Get-Content $Logs\server.log -Tail 20 ; Test-NetConnection 127.0.0.1 -Port 8765" -ForegroundColor Green
+Write-Host "Comprueba: Get-Content $Logs\server.log -Tail 20 ; Test-NetConnection 127.0.0.1 -Port 8765" -ForegroundColor Green

@@ -1,9 +1,9 @@
-# 01-setup-server.ps1  —  run as Administrator on the server (Windows).
-# Prepares the CopyPasteRemote server: repo + venv + deps + keys + machines + firewall.
-# First run only. If the config already exists it is NOT overwritten (keeps the keys).
+# 01-setup-server.ps1  —  ejecutar como Administrador en el servidor (Windows).
+# Prepara el servidor CopyPasteRemote: repo + venv + deps + claves + máquinas + firewall.
+# Solo primera vez. Si el config ya existe, NO se sobrescribe (conserva las claves).
 #
-# Usage:
-#   .\01-setup-server.ps1 -PublicHost "<PUBLIC_IP_OR_DOMAIN>"
+# Uso:
+#   .\01-setup-server.ps1 -PublicHost "<HOST_PUBLICO>"
 
 param(
     [Parameter(Mandatory=$true)] [string] $PublicHost,
@@ -21,10 +21,10 @@ $Conf    = "$Root\server-config.json"
 $Clients = "$Root\clients"
 $RepoUrl = "https://github.com/txpto/CopyPasteRemote"
 
-Write-Host "== CopyPasteRemote: server setup ==" -ForegroundColor Cyan
+Write-Host "== CopyPasteRemote: configuración del servidor ==" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $Root, $Clients | Out-Null
 
-if (-not (Test-Path $Pkg)) { git clone $RepoUrl $Src } else { Write-Host "Repo already present." }
+if (-not (Test-Path $Pkg)) { git clone $RepoUrl $Src } else { Write-Host "Repo ya presente." }
 
 if (-not (Test-Path $VenvPy)) { python -m venv $Venv }
 & $VenvPy -m pip install --upgrade pip
@@ -36,19 +36,19 @@ if (-not (Get-NetFirewallRule -DisplayName "CopyPasteRemote $Port" -ErrorAction 
 }
 
 if (Test-Path $Conf) {
-    Write-Host "Config exists; skipping init/add-machine (so keys are preserved)." -ForegroundColor Yellow
+    Write-Host "El config ya existe; se omite init/add-machine (para conservar las claves)." -ForegroundColor Yellow
 } else {
-    $env:CPR_DATA_DIR = $Data   # makes data_dir absolute in the saved config
+    $env:CPR_DATA_DIR = $Data   # hace que data_dir quede absoluto en el config guardado
     Push-Location $Pkg
     try {
         & $VenvPy -m cpr_server.admin_cli --config $Conf init --public-url "http://$PublicHost`:$Port"
         & $VenvPy -m cpr_server.admin_cli --config $Conf add-machine --slot 1 --name "client1" --client-config "$Clients\client1-config.json"
         & $VenvPy -m cpr_server.admin_cli --config $Conf add-machine --slot 2 --name "client2" --client-config "$Clients\client2-config.json"
-        # Add more with:  ... add-machine --slot N --name "<name>" --client-config "$Clients\<name>-config.json"
+        # Añade más con:  ... add-machine --slot N --name "<nombre>" --client-config "$Clients\<nombre>-config.json"
     } finally { Pop-Location }
-    Write-Host "Client configs written under $Clients" -ForegroundColor Green
+    Write-Host "Configs de cliente escritos en $Clients" -ForegroundColor Green
 }
 
 Write-Host "`nAdmin API key:" -ForegroundColor Cyan
 Push-Location $Pkg; & $VenvPy -m cpr_server.admin_cli --config $Conf show-admin-key; Pop-Location
-Write-Host "`nNext: 02-install-service.ps1 (and 03-enable-tls.ps1 for TLS)." -ForegroundColor Cyan
+Write-Host "`nSiguiente: 02-install-service.ps1 (y 03-enable-tls.ps1 para TLS)." -ForegroundColor Cyan
