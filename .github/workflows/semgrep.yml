@@ -1,22 +1,58 @@
 name: Semgrep
 
+# Static analysis (SAST) with Semgrep. Runs on pushes and PRs to the main branches,
+# on a weekly schedule, and on demand. Findings are uploaded to GitHub Code Scanning
+# (Security tab) as SARIF.
+
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"   # every Monday at 03:00 UTC
+  workflow_dispatch:
+
+# Least-privilege token; security-events:write is needed to upload the SARIF.
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: semgrep-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   semgrep:
+    name: scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Semgrep
+        run: python -m pip install --upgrade semgrep
 
       - name: Run Semgrep
-        uses: semgrep/semgrep-action@v1
+        # Do not fail the job on findings; we surface them in Code Scanning instead.
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config p/default \
+            --config p/python \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --config p/security-audit \
+            --sarif --output semgrep.sarif
+
+      - name: Upload SARIF to Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          config: >-
-            p/python
-            p/secrets
-            p/sql-injection
-            p/owasp-top-ten
+          sarif_file: semgrep.sarif
+          category: semgrep
